@@ -122,8 +122,10 @@ By default, when skycatd is running normally, two TCP listeners are started:
 
 The WSJT-X endpoint implements the Hamlib initialization queries `\\chk_vfo` and
 `\\dump_state`, exposes frequency/mode/PTT reads, and permits CAT PTT. Radio-state
-writes such as frequency, mode, VFO, split, SAT mode and CTCSS are rejected so that
-SkyRoof remains the only tuning/Doppler controller.
+writes such as frequency, mode, VFO, split, SAT mode and CTCSS are acknowledged as
+successful no-ops but are never forwarded to the radio. This keeps WSJT-X/Hamlib
+from entering a Radio Fault during setup or band changes while SkyRoof remains the
+only tuning/Doppler controller.
 
 The proxy port can be changed with:
 
