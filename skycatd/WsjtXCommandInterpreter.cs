@@ -48,7 +48,13 @@ namespace skycatd
         "v" or "\\get_vfo" => "VFOA",
         "s" or "\\get_split_vfo" => "0\nVFOB",
 
-        // The only write operation allowed on the WSJT-X port is PTT.
+        // WSJT-X Test CAT writes the just-read dial frequency back to the rig.
+        // Accept a near-identical write as a no-op so the test can complete,
+        // but do not let WSJT-X take over SkyRoof's Doppler tuning.
+        "F" when args.Length == 2 && long.TryParse(args[1], out var rxFrequency)
+          => AcceptNearCurrentFrequency(rxFrequency),
+
+        // The only radio-changing operation allowed on the WSJT-X port is PTT.
         "T" when args.Length == 2 && (args[1] == "0" || args[1] == "1")
           => SetPtt(args[1]),
         "\\set_ptt" when args.Length == 2 && (args[1] == "0" || args[1] == "1")
@@ -81,6 +87,29 @@ namespace skycatd
       // rigctld get_mode returns two records: mode and passband width.
       // SkyCAT does not track the selected filter width, so report 0 ("normal").
       return $"{reply}\n0";
+    }
+
+    private string AcceptNearCurrentFrequency(long requestedFrequency)
+    {
+      const long toleranceHz = 250;
+
+      string currentReply = Forward("f").Trim();
+      if (!long.TryParse(currentReply, out long currentFrequency))
+        return currentReply.StartsWith("RPRT ", StringComparison.Ordinal)
+          ? currentReply
+          : "RPRT -9";
+
+      long delta = Math.Abs(requestedFrequency - currentFrequency);
+      if (delta <= toleranceHz)
+      {
+        Logger?.LogDebug(
+          $"WSJT-X frequency write accepted as no-op: requested={requestedFrequency}, current={currentFrequency}, delta={delta} Hz.");
+        return "RPRT 0";
+      }
+
+      Logger?.LogWarning(
+        $"WSJT-X frequency write blocked: requested={requestedFrequency}, current={currentFrequency}, delta={delta} Hz.");
+      return "RPRT -11";
     }
 
     private string SetPtt(string value)
@@ -138,7 +167,7 @@ namespace skycatd
       "targetable_vfo=0x0\n" +
       "has_set_vfo=0\n" +
       "has_get_vfo=1\n" +
-      "has_set_freq=0\n" +     // SkyRoof owns tuning
+      "has_set_freq=1\n" +     // compatibility no-op for near-current writes only
       "has_get_freq=1\n" +
       "timeout=1000\n" +
       "rig_model=3081\n" +
