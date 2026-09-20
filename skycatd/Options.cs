@@ -9,7 +9,7 @@ namespace skycatd
   {
     [Option('m', "model", Required = false, HelpText = "Radio model number")]
     [Range(1, int.MaxValue, ErrorMessage = "Model number must be greater than 0")]
-    public string Model { get; set; }
+    public string Model { get; set; } = string.Empty;
 
     [Option('r', "rig-file", Required = false, HelpText = "Serial port name")]
     [Required(AllowEmptyStrings = true, ErrorMessage = "Serial port name is required")]
@@ -21,6 +21,13 @@ namespace skycatd
     [Option('t', "port", Required = false, HelpText = "TCP listening port.", Default = 4532)]
     [Range(1, 65535, ErrorMessage = "Port must be between 1 and 65535")]
     public int Port { get; set; }
+
+    [Option("wsjtx-port", Required = false, HelpText = "Loopback-only WSJT-X Hamlib NET rigctl compatibility port.", Default = 4534)]
+    [Range(1, 65535, ErrorMessage = "WSJT-X port must be between 1 and 65535")]
+    public int WsjtXPort { get; set; }
+
+    [Option("no-wsjtx-proxy", Required = false, HelpText = "Disable the loopback WSJT-X compatibility server.", Default = false)]
+    public bool DisableWsjtXProxy { get; set; }
 
     [Option('l', "list", Required = false, HelpText = "List available model numbers and exit.")]
     public bool List { get; set; }
@@ -40,28 +47,30 @@ namespace skycatd
     // Returns true if neither -l nor -a is specified, in which case -m and -r are required
     public bool RequiresModelAndPort => !(List || All);
 
-    // Add this method after the RequiresModelAndPort property
     public bool Validate()
     {
       if (!RequiresModelAndPort)
-        return true;  // No validation needed, so it's valid
-      
+        return true;
+
       var errors = new List<string>();
-      
+
       if (string.IsNullOrEmpty(Model))
         errors.Add("Model number must be greater than 0.");
-        
+
       if (string.IsNullOrWhiteSpace(RigFile))
         errors.Add("Serial port name is required.");
-        
+
+      if (!DisableWsjtXProxy && Port == WsjtXPort)
+        errors.Add("The main CAT port and WSJT-X proxy port must be different.");
+
       if (errors.Any())
       {
         foreach (var error in errors)
           Console.Error.WriteLine(error);
-        return false;  // Return false to indicate validation failed
+        return false;
       }
-      
-      return true;  // Validation passed
+
+      return true;
     }
   }
 }

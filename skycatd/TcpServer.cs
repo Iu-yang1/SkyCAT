@@ -1,11 +1,8 @@
 ﻿using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
-using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 
 namespace skycatd
@@ -13,16 +10,31 @@ namespace skycatd
   public class TcpServer
   {
     private readonly int Port;
-    private readonly CommandInterpreter Interpreter;
+    private readonly Func<string, string> CommandHandler;
     private readonly ILogger Logger;
+    private readonly IPAddress ListenAddress;
+    private readonly object CommandLock;
+    private readonly Action? ClientDisconnected;
+    private readonly string ServerName;
     private TcpListener? Listener;
     private readonly ConcurrentBag<TcpClient> ActiveClients = new();
 
-    public TcpServer(int port, CommandInterpreter interpreter, ILogger logger)
+    public TcpServer(
+      int port,
+      Func<string, string> commandHandler,
+      ILogger logger,
+      IPAddress? listenAddress = null,
+      object? commandLock = null,
+      Action? clientDisconnected = null,
+      string serverName = "TCP")
     {
       Port = port;
-      Interpreter = interpreter;
+      CommandHandler = commandHandler;
       Logger = logger;
+      ListenAddress = listenAddress ?? IPAddress.Any;
+      CommandLock = commandLock ?? new object();
+      ClientDisconnected = clientDisconnected;
+      ServerName = serverName;
     }
 
     public void Start()
@@ -31,7 +43,7 @@ namespace skycatd
 
       try
       {
-        Listener = new TcpListener(IPAddress.Any, Port);
+        Listener = new TcpListener(ListenAddress, Port);
         Listener.Start();
 
         // start accepting clients in the background
@@ -48,7 +60,7 @@ namespace skycatd
               // Stop() called
               if (Listener == null) break;
               // failure
-              else Logger.LogError($"TCP server stopped: {ex.Message}");
+              else Logger.LogError($"{ServerName} server stopped: {ex.Message}");
             }
         });
       }
@@ -60,35 +72,57 @@ namespace skycatd
     }
 
     int NextId = 1;
-    private readonly object Lock = new();
 
     private void HandleClient(TcpClient client)
     {
-      int id = NextId++;
+      int id = Interlocked.Increment(ref NextId) - 1;
       ActiveClients.Add(client);
       var endPoint = client.Client.RemoteEndPoint;
-      Logger.LogInformation($"Client #{id} connected: {endPoint} ({ActiveClients.Count} connected clients)");
-      using var stream = client.GetStream();
-      using var reader = new StreamReader(stream, Encoding.ASCII);
-      using var writer = new StreamWriter(stream, Encoding.ASCII) { AutoFlush = true };
+      Logger.LogInformation($"{ServerName} client #{id} connected: {endPoint} ({ActiveClients.Count} connected clients)");
 
-      //writer.WriteLine("Welcome to skycatd. Type commands:");
-
-      string? line;
-      while ((line = reader.ReadLine()) != null)
+      try
       {
-        Logger.LogDebug($"Received from client #{id}: '{line}'");
+        using var stream = client.GetStream();
+        using var reader = new StreamReader(stream, Encoding.ASCII);
+        using var writer = new StreamWriter(stream, Encoding.ASCII) { AutoFlush = true };
 
-        string response;
-        lock (Lock) response = Interpreter.Execute(line);
+        string? line;
+        while ((line = reader.ReadLine()) != null)
+        {
+          Logger.LogDebug($"Received from {ServerName} client #{id}: '{line}'");
 
-        Logger.LogDebug($"  Replying to client #{id}: {AddDescription(response)}");
-        writer.Write(response + "\n");
+          string response;
+          lock (CommandLock) response = CommandHandler(line);
+
+          Logger.LogDebug($"  Replying to {ServerName} client #{id}: {AddDescription(response)}");
+          writer.Write(response + "\n");
+        }
       }
+      catch (IOException ex)
+      {
+        Logger.LogDebug($"{ServerName} client #{id} disconnected with I/O error: {ex.Message}");
+      }
+      catch (SocketException ex)
+      {
+        Logger.LogDebug($"{ServerName} client #{id} disconnected with socket error: {ex.Message}");
+      }
+      finally
+      {
+        client.Close();
+        ActiveClients.TryTake(out _);
 
-      client.Close();
-      ActiveClients.TryTake(out _);
-      Logger.LogInformation($"Client  #{id} disconnected: {endPoint} ({ActiveClients.Count} connected clients)");
+        if (ClientDisconnected != null)
+          try
+          {
+            lock (CommandLock) ClientDisconnected();
+          }
+          catch (Exception ex)
+          {
+            Logger.LogWarning($"{ServerName} disconnect cleanup failed: {ex.Message}");
+          }
+
+        Logger.LogInformation($"{ServerName} client #{id} disconnected: {endPoint} ({ActiveClients.Count} connected clients)");
+      }
     }
 
     private string AddDescription(string response)
@@ -114,7 +148,6 @@ namespace skycatd
       foreach (var client in ActiveClients)
         try
         {
-
           client.Close();
         }
         catch { }
@@ -122,7 +155,7 @@ namespace skycatd
 
       Listener?.Stop();
       Listener = null;
-      Logger.LogInformation("TCP Server stopped.");
+      Logger.LogInformation($"{ServerName} server stopped.");
     }
 
     public bool IsListening()

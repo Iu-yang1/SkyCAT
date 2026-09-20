@@ -109,3 +109,50 @@ where **frequency** is the frequency in Hertz, **mode** is a mode name, e.g., CW
 the CTCSS sub-audible (PL) tone in tenths of Hz, e.g. `C 670` = 67.0 Hz.
 
 For compatibility with rigctld.exe, the '**U SATMODE 1**', '**S 1 VFOB**' and '**S 0 VFOB**' commands are recognized as aliases of the Duplex, Split and Simplex setup commands respectively.
+
+
+## WSJT-X Compatibility Proxy
+
+This fork adds a restricted Hamlib NET rigctl compatibility endpoint for WSJT-X.
+
+By default, when skycatd is running normally, two TCP listeners are started:
+
+- **0.0.0.0:4532** — normal SkyCAT/SkyRoof control endpoint.
+- **127.0.0.1:4534** — loopback-only WSJT-X compatibility endpoint.
+
+The WSJT-X endpoint implements the Hamlib initialization queries `\\chk_vfo` and
+`\\dump_state`, exposes frequency/mode/PTT reads, and permits CAT PTT. Radio-state
+writes such as frequency, mode, VFO, split, SAT mode and CTCSS are acknowledged as
+successful no-ops but are never forwarded to the radio. This keeps WSJT-X/Hamlib
+from entering a Radio Fault during setup or band changes while SkyRoof remains the
+only tuning/Doppler controller.
+
+The proxy port can be changed with:
+
+``` bash
+skycatd.exe -m IC-9700 -r COM9 -s 115200 --wsjtx-port 4534
+```
+
+Disable the proxy entirely with:
+
+``` bash
+skycatd.exe -m IC-9700 -r COM9 -s 115200 --no-wsjtx-proxy
+```
+
+The WSJT-X listener is intentionally bound to loopback only.
+
+### WSJT-X settings
+
+In **File → Settings → Radio**:
+
+- **Rig:** Hamlib NET rigctl
+- **Network Server:** `127.0.0.1:4534`
+- **PTT Method:** CAT
+- **Mode:** None
+- **Split Operation:** None
+
+SkyRoof should continue connecting directly to the normal SkyCAT port, usually
+`127.0.0.1:4532`.
+
+When a WSJT-X client that asserted CAT PTT disconnects, the proxy sends PTT OFF as a
+safety measure.

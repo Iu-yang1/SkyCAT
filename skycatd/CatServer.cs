@@ -1,4 +1,5 @@
 using System.IO.Ports;
+using System.Net;
 using Microsoft.Extensions.Logging;
 using Serilog;
 using Serilog.Sinks.SystemConsole.Themes;
@@ -16,12 +17,16 @@ namespace skycatd
     private readonly CancellationTokenSource cts = new();
     private readonly Microsoft.Extensions.Logging.ILogger logger;
     private readonly TcpServer tcpServer;
+    private readonly TcpServer? wsjtXTcpServer;
     private readonly CommandInterpreter commandInterpreter;
+    private readonly WsjtXCommandInterpreter? wsjtXInterpreter;
     private readonly CatCommandSender commandSender;
     private readonly SerialPort serialPort;
+    private readonly object commandLock = new();
 
     private PortStatus ComStatus;
     private PortStatus TcpStatus;
+    private PortStatus WsjtXTcpStatus;
 
     public CatServer(Options options)
     {
@@ -36,7 +41,26 @@ namespace skycatd
       commandSender = commandInterpreter.CommandSender;
       serialPort = commandSender.SerialPort;
 
-      tcpServer = new TcpServer(options.Port, commandInterpreter, logger);
+      tcpServer = new TcpServer(
+        options.Port,
+        commandInterpreter.Execute,
+        logger,
+        IPAddress.Any,
+        commandLock,
+        serverName: "CAT");
+
+      if (!options.DisableWsjtXProxy)
+      {
+        wsjtXInterpreter = new WsjtXCommandInterpreter(commandInterpreter.Execute, logger);
+        wsjtXTcpServer = new TcpServer(
+          options.WsjtXPort,
+          wsjtXInterpreter.Execute,
+          logger,
+          IPAddress.Loopback,
+          commandLock,
+          wsjtXInterpreter.EnsurePttOff,
+          "WSJT-X proxy");
+      }
     }
 
     ConsoleTheme theme = new AnsiConsoleTheme(new Dictionary<ConsoleThemeStyle, string>
@@ -80,14 +104,14 @@ namespace skycatd
 
     private void SleepWithCancellation(int totalMilliseconds)
     {
-        const int interval = 100; 
-        int elapsed = 0;
-        
-        while (elapsed < totalMilliseconds && !cts.Token.IsCancellationRequested)
-        {
-            Thread.Sleep(interval);
-            elapsed += interval;
-        }
+      const int interval = 100;
+      int elapsed = 0;
+
+      while (elapsed < totalMilliseconds && !cts.Token.IsCancellationRequested)
+      {
+        Thread.Sleep(interval);
+        elapsed += interval;
+      }
     }
 
     public void Run()
@@ -98,7 +122,7 @@ namespace skycatd
           // try to open com port
           try
           {
-            if (ComStatus == PortStatus.WasOpen) logger.LogWarning($"Serial port closed unexpectedly. Reopening.");
+            if (ComStatus == PortStatus.WasOpen) logger.LogWarning("Serial port closed unexpectedly. Reopening.");
             else if (ComStatus == PortStatus.NeverOpened) logger.LogInformation($"Opening serial port {options.RigFile} at {serialPort.BaudRate} Baud...");
             else logger.LogTrace("Opening serial port...");
 
@@ -107,36 +131,54 @@ namespace skycatd
             Thread.Sleep(300);
 
             logger.LogInformation("Serial port opened.");
-            logger.LogInformation($"Starting TCP server on port {options.Port}...");
           }
           catch (Exception ex)
           {
             string message = $"Failed to open serial port: {ex.Message} Will retry.";
             if (ComStatus == PortStatus.WasClosed) logger.LogTrace(message); else logger.LogWarning(message);
             tcpServer.Stop();
+            wsjtXTcpServer?.Stop();
             ComStatus = PortStatus.WasClosed;
             TcpStatus = PortStatus.WasClosed;
+            WsjtXTcpStatus = PortStatus.WasClosed;
           }
 
-        // if com is open, try to start tcp server
+        // if com is open, try to start the main SkyCAT TCP server
         if (serialPort.IsOpen && !tcpServer.IsListening())
           try
           {
-            if (TcpStatus == PortStatus.WasOpen) logger.LogInformation($"TCP server stopped unexpectedly. Restarting."); 
+            if (TcpStatus == PortStatus.WasOpen) logger.LogInformation("CAT TCP server stopped unexpectedly. Restarting.");
             tcpServer.Start();
             TcpStatus = PortStatus.WasOpen;
-            logger.LogInformation($"TCP server started.");
+            logger.LogInformation($"CAT TCP server started on 0.0.0.0:{options.Port}.");
           }
           catch (Exception ex)
           {
-            string message = $"Failed to start TCP server: {ex.Message} Will retry.";
+            string message = $"Failed to start CAT TCP server: {ex.Message} Will retry.";
             if (TcpStatus == PortStatus.WasClosed) logger.LogTrace(message); else logger.LogWarning(message);
             TcpStatus = PortStatus.WasClosed;
           }
 
-        SleepWithCancellation(2000); 
+        // WSJT-X compatibility is intentionally loopback-only.
+        if (serialPort.IsOpen && wsjtXTcpServer != null && !wsjtXTcpServer.IsListening())
+          try
+          {
+            if (WsjtXTcpStatus == PortStatus.WasOpen) logger.LogInformation("WSJT-X proxy stopped unexpectedly. Restarting.");
+            wsjtXTcpServer.Start();
+            WsjtXTcpStatus = PortStatus.WasOpen;
+            logger.LogInformation($"WSJT-X proxy started on 127.0.0.1:{options.WsjtXPort}.");
+          }
+          catch (Exception ex)
+          {
+            string message = $"Failed to start WSJT-X proxy: {ex.Message} Will retry.";
+            if (WsjtXTcpStatus == PortStatus.WasClosed) logger.LogTrace(message); else logger.LogWarning(message);
+            WsjtXTcpStatus = PortStatus.WasClosed;
+          }
+
+        SleepWithCancellation(2000);
       }
 
+      wsjtXTcpServer?.Stop();
       tcpServer.Stop();
       if (serialPort.IsOpen) serialPort.Close();
       logger.LogInformation("CatServer shutting down.");
