@@ -4,8 +4,8 @@ namespace skycatd
 {
   /// <summary>
   /// A deliberately restricted rigctld-compatible command surface for WSJT-X.
-  /// It exposes read-only radio state plus CAT PTT, while SkyRoof remains the
-  /// authoritative controller for frequency, mode, VFO, split and satellite state.
+  /// Reads and CAT PTT reach the radio. Other write commands are acknowledged
+  /// as no-ops so WSJT-X/Hamlib never competes with SkyRoof for radio state.
   /// </summary>
   public class WsjtXCommandInterpreter
   {
@@ -24,12 +24,22 @@ namespace skycatd
       string line = command.Trim();
       if (line.Length == 0) return "RPRT -1";
 
-      // Hamlib NET rigctl performs these two queries while opening the connection.
+      // Hamlib NET rigctl performs these while opening the connection.
       if (line == "\\chk_vfo" || line == "chk_vfo") return "0";
       if (line == "\\dump_state" || line == "dump_state") return DumpState;
 
       var args = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
       string op = args[0];
+
+      // Long-form rigctl setters are all safe-sunk except PTT.
+      if (op.StartsWith("\\set_", StringComparison.Ordinal))
+      {
+        if (op == "\\set_ptt")
+          return args.Length == 2 ? SetPtt(args[1]) : "RPRT -1";
+
+        Logger?.LogDebug($"WSJT-X write acknowledged as no-op: '{line}'");
+        return "RPRT 0";
+      }
 
       return op switch
       {
@@ -37,35 +47,42 @@ namespace skycatd
         "f" => Forward("f"),
         "\\get_freq" => Forward("f"),
         "i" => Forward("i"),
+        "\\get_split_freq" => Forward("i"),
         "m" => ReadMode("m"),
         "\\get_mode" => ReadMode("m"),
         "x" => ReadMode("x"),
+        "\\get_split_mode" => ReadMode("x"),
         "t" => ReadPtt(),
         "\\get_ptt" => ReadPtt(),
 
-        // Hamlib may query these even when WSJT-X is configured with Split=None.
-        // We intentionally present a stable, non-VFO-mode, non-split view.
+        // Stable logical VFO/split view. These are not forwarded to the radio.
         "v" or "\\get_vfo" => "VFOA",
         "s" or "\\get_split_vfo" => "0\nVFOB",
 
-        // WSJT-X Test CAT writes the just-read dial frequency back to the rig.
-        // Accept a near-identical write as a no-op so the test can complete,
-        // but do not let WSJT-X take over SkyRoof's Doppler tuning.
-        "F" when args.Length == 2 && long.TryParse(args[1], out var rxFrequency)
-          => AcceptNearCurrentFrequency(rxFrequency),
+        // Useful identity query; does not touch the radio.
+        "\\get_info" => "SkyCAT WSJT-X compatibility proxy",
 
-        // The only radio-changing operation allowed on the WSJT-X port is PTT.
-        "T" when args.Length == 2 && (args[1] == "0" || args[1] == "1")
-          => SetPtt(args[1]),
-        "\\set_ptt" when args.Length == 2 && (args[1] == "0" || args[1] == "1")
-          => SetPtt(args[1]),
+        // CAT PTT is the only write that reaches the radio.
+        "T" when args.Length == 2 => SetPtt(args[1]),
+
+        // WSJT-X/Hamlib can issue these during Test CAT, setup changes or
+        // band changes. Acknowledge them without forwarding so SkyRoof remains
+        // the sole controller of frequency, mode, VFO, split, tone, etc.
+        "F" or "I" or "M" or "X" or "V" or "S" or "C" or "U"
+          or "J" or "Z" or "L" or "P" or "G" or "H" or "A" or "Y"
+          or "R" or "O" or "D" => SafeNoOp(line),
 
         // A polite no-op for clients that explicitly close a rigctl session.
         "q" or "\\quit" => "RPRT 0",
 
-        // Frequency/mode/VFO/split/tone writes are intentionally unavailable.
         _ => "RPRT -11"
       };
+    }
+
+    private string SafeNoOp(string command)
+    {
+      Logger?.LogDebug($"WSJT-X write acknowledged as no-op: '{command}'");
+      return "RPRT 0";
     }
 
     private string ReadPtt()
@@ -84,38 +101,21 @@ namespace skycatd
       string reply = Forward(command).Trim();
       if (reply.StartsWith("RPRT ", StringComparison.Ordinal)) return reply;
 
-      // rigctld get_mode returns two records: mode and passband width.
+      // rigctld get_mode/get_split_mode returns mode and passband width.
       // SkyCAT does not track the selected filter width, so report 0 ("normal").
       return $"{reply}\n0";
     }
 
-    private string AcceptNearCurrentFrequency(long requestedFrequency)
-    {
-      const long toleranceHz = 250;
-
-      string currentReply = Forward("f").Trim();
-      if (!long.TryParse(currentReply, out long currentFrequency))
-        return currentReply.StartsWith("RPRT ", StringComparison.Ordinal)
-          ? currentReply
-          : "RPRT -9";
-
-      long delta = Math.Abs(requestedFrequency - currentFrequency);
-      if (delta <= toleranceHz)
-      {
-        Logger?.LogDebug(
-          $"WSJT-X frequency write accepted as no-op: requested={requestedFrequency}, current={currentFrequency}, delta={delta} Hz.");
-        return "RPRT 0";
-      }
-
-      Logger?.LogWarning(
-        $"WSJT-X frequency write blocked: requested={requestedFrequency}, current={currentFrequency}, delta={delta} Hz.");
-      return "RPRT -11";
-    }
-
     private string SetPtt(string value)
     {
-      string reply = Forward($"T {value}");
-      if (reply == "RPRT 0") PttAsserted = value == "1";
+      // Hamlib ptt_t: 0=OFF, 1=ON, 2=ON_MIC, 3=ON_DATA.
+      // IC-9700/SkyCAT has a binary CAT PTT, so all non-zero variants map to ON.
+      if (!int.TryParse(value, out int ptt) || ptt < 0 || ptt > 3)
+        return "RPRT -1";
+
+      string normalized = ptt == 0 ? "0" : "1";
+      string reply = Forward($"T {normalized}");
+      if (reply == "RPRT 0") PttAsserted = normalized == "1";
       return reply;
     }
 
@@ -141,8 +141,8 @@ namespace skycatd
     }
 
     // Minimal rigctld protocol-v1 state accepted by Hamlib NET rigctl.
-    // The fixed protocol-v0 section must be present even when no ranges/steps
-    // are advertised. Protocol-v1 fields then describe the restricted surface.
+    // Write capabilities are intentionally advertised where Hamlib/WSJT-X expects
+    // them, but the proxy safe-sinks those writes instead of changing the radio.
     internal const string DumpState =
       "1\n" +                  // protocol version
       "3081\n" +               // underlying radio model (IC-9700)
@@ -163,15 +163,15 @@ namespace skycatd
       "0x0\n" +                // has_set_level
       "0x0\n" +                // has_get_parm
       "0x0\n" +                // has_set_parm
-      "ptt_type=0x5\n" +       // CAT PTT, mic/data capable
+      "ptt_type=0x5\n" +       // CAT PTT, MIC/DATA variants supported
       "targetable_vfo=0x0\n" +
-      "has_set_vfo=0\n" +
+      "has_set_vfo=1\n" +      // compatibility no-op
       "has_get_vfo=1\n" +
-      "has_set_freq=1\n" +     // compatibility no-op for near-current writes only
+      "has_set_freq=1\n" +     // compatibility no-op
       "has_get_freq=1\n" +
-      "timeout=1000\n" +
+      "timeout=1500\n" +
       "rig_model=3081\n" +
-      "rigctld_version=SkyCAT-WSJTX-1\n" +
+      "rigctld_version=SkyCAT-WSJTX-2\n" +
       "done";
   }
 }
