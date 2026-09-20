@@ -9,7 +9,7 @@ namespace skycatd
   {
     [Option('m', "model", Required = false, HelpText = "Radio model number")]
     [Range(1, int.MaxValue, ErrorMessage = "Model number must be greater than 0")]
-    public string Model { get; set; }
+    public string Model { get; set; } = string.Empty;
 
     [Option('r', "rig-file", Required = false, HelpText = "Serial port name")]
     [Required(AllowEmptyStrings = true, ErrorMessage = "Serial port name is required")]

@@ -103,8 +103,35 @@ namespace SkyCat.Tests
       Assert.Equal(new[] { "T 1", "T 0" }, forwarded);
     }
 
+    [Fact]
+    public void NearCurrentFrequencyWriteIsAcceptedWithoutChangingRadio()
+    {
+      var forwarded = new List<string>();
+      var proxy = new WsjtXCommandInterpreter(command =>
+      {
+        forwarded.Add(command);
+        return command == "f" ? "435604760" : "RPRT 0";
+      });
+
+      Assert.Equal("RPRT 0", proxy.Execute("F 435604755"));
+      Assert.Equal(new[] { "f" }, forwarded);
+    }
+
+    [Fact]
+    public void DistantFrequencyWriteIsBlockedAfterCheckingCurrentFrequency()
+    {
+      var forwarded = new List<string>();
+      var proxy = new WsjtXCommandInterpreter(command =>
+      {
+        forwarded.Add(command);
+        return command == "f" ? "435604760" : "RPRT 0";
+      });
+
+      Assert.Equal("RPRT -11", proxy.Execute("F 435614760"));
+      Assert.Equal(new[] { "f" }, forwarded);
+    }
+
     [Theory]
-    [InlineData("F 436800000")]
     [InlineData("I 145900000")]
     [InlineData("M USB 0")]
     [InlineData("X USB 0")]
