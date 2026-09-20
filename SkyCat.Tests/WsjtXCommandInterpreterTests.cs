@@ -23,7 +23,7 @@ namespace SkyCat.Tests
 
       Assert.StartsWith("1\n3081\n0\n", reply);
       Assert.Contains("ptt_type=0x5\n", reply);
-      Assert.Contains("has_set_freq=0\n", reply);
+      Assert.Contains("has_set_freq=1\n", reply);
       Assert.Contains("has_get_freq=1\n", reply);
       Assert.EndsWith("done", reply);
     }
