@@ -576,13 +576,32 @@ namespace SkyCat
             Buffer.RemoveRange(0, start);
 
           int end = -1;
+          int nestedStart = -1;
+
           for (int i = 2; i < Buffer.Count; i++)
           {
+            if (i + 1 < Buffer.Count &&
+                Buffer[i] == 0xFE &&
+                Buffer[i + 1] == 0xFE)
+            {
+              nestedStart = i;
+              break;
+            }
+
             if (Buffer[i] == 0xFD)
             {
               end = i;
               break;
             }
+          }
+
+          // A command/reply read can consume the tail of a scope frame that this
+          // tap saw only partially. If a new FE FE arrives before FD, abandon the
+          // stale partial frame and resynchronize at the newer preamble.
+          if (nestedStart >= 0)
+          {
+            Buffer.RemoveRange(0, nestedStart);
+            continue;
           }
 
           if (end < 0)
