@@ -26,6 +26,10 @@ namespace skycatd
     [Range(1, 65535, ErrorMessage = "WSJT-X port must be between 1 and 65535")]
     public int WsjtXPort { get; set; }
 
+    [Option("scope-port", Required = false, HelpText = "Loopback-only binary IC-9700 scope stream port.", Default = 4535)]
+    [Range(1, 65535, ErrorMessage = "Scope stream port must be between 1 and 65535")]
+    public int ScopePort { get; set; }
+
     [Option("no-wsjtx-proxy", Required = false, HelpText = "Disable the loopback WSJT-X compatibility server.", Default = false)]
     public bool DisableWsjtXProxy { get; set; }
 
@@ -62,6 +66,12 @@ namespace skycatd
 
       if (!DisableWsjtXProxy && Port == WsjtXPort)
         errors.Add("The main CAT port and WSJT-X proxy port must be different.");
+
+      if (Port == ScopePort)
+        errors.Add("The main CAT port and scope stream port must be different.");
+
+      if (!DisableWsjtXProxy && WsjtXPort == ScopePort)
+        errors.Add("The WSJT-X proxy port and scope stream port must be different.");
 
       if (errors.Any())
       {
