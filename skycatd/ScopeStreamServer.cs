@@ -132,6 +132,8 @@ namespace skycatd
       Logger.LogInformation("Scope stream server stopped.");
     }
 
+    internal bool HasClients => !Clients.IsEmpty;
+
     internal bool IsListening() =>
       Listener != null && Listener.Server.IsBound;
   }
