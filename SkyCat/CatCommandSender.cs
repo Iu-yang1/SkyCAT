@@ -496,6 +496,12 @@ namespace SkyCat
       return bytesRead;
     }
 
+    public void DrainAsynchronousScopeTraffic()
+    {
+      if (!SerialPort.IsOpen) return;
+      DumpUnexpectedBytes();
+    }
+
     // Ignore bytes that arrived before the new command was sent. With IC-9700
     // scope output enabled this is normal asynchronous traffic, not an error.
     private void DumpUnexpectedBytes()
