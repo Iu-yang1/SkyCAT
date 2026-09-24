@@ -18,6 +18,7 @@ namespace skycatd
     private readonly Microsoft.Extensions.Logging.ILogger logger;
     private readonly TcpServer tcpServer;
     private readonly TcpServer? wsjtXTcpServer;
+    private readonly ScopeStreamServer scopeStreamServer;
     private readonly CommandInterpreter commandInterpreter;
     private readonly WsjtXCommandInterpreter? wsjtXInterpreter;
     private readonly CatCommandSender commandSender;
@@ -27,6 +28,7 @@ namespace skycatd
     private PortStatus ComStatus;
     private PortStatus TcpStatus;
     private PortStatus WsjtXTcpStatus;
+    private PortStatus ScopeTcpStatus;
 
     public CatServer(Options options)
     {
@@ -40,6 +42,9 @@ namespace skycatd
       commandInterpreter = new CommandInterpreter(options, logger);
       commandSender = commandInterpreter.CommandSender;
       serialPort = commandSender.SerialPort;
+
+      scopeStreamServer = new ScopeStreamServer(options.ScopePort, logger);
+      commandSender.ScopeFrameReceived += scopeStreamServer.Publish;
 
       tcpServer = new TcpServer(
         options.Port,
@@ -138,9 +143,11 @@ namespace skycatd
             if (ComStatus == PortStatus.WasClosed) logger.LogTrace(message); else logger.LogWarning(message);
             tcpServer.Stop();
             wsjtXTcpServer?.Stop();
+            scopeStreamServer.Stop();
             ComStatus = PortStatus.WasClosed;
             TcpStatus = PortStatus.WasClosed;
             WsjtXTcpStatus = PortStatus.WasClosed;
+            ScopeTcpStatus = PortStatus.WasClosed;
           }
 
         // if com is open, try to start the main SkyCAT TCP server
@@ -175,11 +182,30 @@ namespace skycatd
             WsjtXTcpStatus = PortStatus.WasClosed;
           }
 
+        // Native IC-9700 scope frames are exported separately so scope traffic can
+        // never corrupt the line-oriented CAT/rigctl protocol.
+        if (serialPort.IsOpen && !scopeStreamServer.IsListening())
+          try
+          {
+            if (ScopeTcpStatus == PortStatus.WasOpen) logger.LogInformation("Scope stream server stopped unexpectedly. Restarting.");
+            scopeStreamServer.Start();
+            ScopeTcpStatus = PortStatus.WasOpen;
+            logger.LogInformation($"Scope stream server started on 127.0.0.1:{options.ScopePort}.");
+          }
+          catch (Exception ex)
+          {
+            string message = $"Failed to start scope stream server: {ex.Message} Will retry.";
+            if (ScopeTcpStatus == PortStatus.WasClosed) logger.LogTrace(message); else logger.LogWarning(message);
+            ScopeTcpStatus = PortStatus.WasClosed;
+          }
+
         SleepWithCancellation(2000);
       }
 
       wsjtXTcpServer?.Stop();
+      scopeStreamServer.Stop();
       tcpServer.Stop();
+      commandSender.ScopeFrameReceived -= scopeStreamServer.Publish;
       if (serialPort.IsOpen) serialPort.Close();
       logger.LogInformation("CatServer shutting down.");
     }
