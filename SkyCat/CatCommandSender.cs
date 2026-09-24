@@ -524,6 +524,12 @@ namespace SkyCat
       int availableBytes = SerialPort.BytesToRead;
       if (availableBytes == 0) return;
 
+      // A drain can begin in the middle of a 27 00 frame if the preceding bytes
+      // were consumed while waiting for a CAT reply. The shared ScopeTap retains
+      // that partial frame across all receive paths, so a short tail such as
+      // 0E-FD or 00-FD is expected asynchronous scope traffic, not corruption.
+      bool continuesBufferedFrame = ScopeTap.HasPartialFrame;
+
       byte[] buffer = new byte[availableBytes];
       int received = ReceiveBytes(buffer, 0, availableBytes);
       if (received <= 0) return;
@@ -533,10 +539,10 @@ namespace SkyCat
           buffer.AsSpan(0, received),
           new byte[] { 0xFE, 0xFE, 0xE0, 0xA2, 0x27, 0x00 }) >= 0;
 
-      if (containsScope)
+      if (containsScope || continuesBufferedFrame)
       {
         Log?.LogTrace(
-          $"Discarded {received} byte(s) of pre-command asynchronous CI-V/scope traffic");
+          $"Drained {received} byte(s) of asynchronous CI-V/scope traffic");
         return;
       }
 
@@ -561,6 +567,8 @@ namespace SkyCat
       {
         Callback = callback;
       }
+
+      internal bool HasPartialFrame => Buffer.Count > 0;
 
       internal void FeedByte(byte value)
       {
