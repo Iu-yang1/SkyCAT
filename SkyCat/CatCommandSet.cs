@@ -29,6 +29,10 @@ namespace SkyCat
     write_ctcss_tone,
     enable_ctcss,
     disable_ctcss,
+    enable_scope,
+    disable_scope,
+    enable_scope_data,
+    disable_scope_data,
   }
 
   public enum CatRestriction
