@@ -52,6 +52,7 @@ skycatd -m IC-9700 -r COM9 -s 115200 -t 4532 -vvv -f
 - **-s** - The Baud rate of the serial port. Optional, the program knows the maximum speed of each supported radio;
 
 - **-t** - TCP listening port, optional, defaults to 4532;
+- **--scope-port** - loopback-only binary IC-9700 scope stream port, defaults to 4535. Each frame is sent as a 4-byte little-endian length followed by the raw CI-V frame.
 
 - **-vvv** - optional, enables detailed logging;
 
@@ -115,10 +116,11 @@ For compatibility with rigctld.exe, the '**U SATMODE 1**', '**S 1 VFOB**' and '*
 
 This fork adds a restricted Hamlib NET rigctl compatibility endpoint for WSJT-X.
 
-By default, when skycatd is running normally, two TCP listeners are started:
+By default, when skycatd is running normally, three TCP listeners are started:
 
 - **0.0.0.0:4532** — normal SkyCAT/SkyRoof control endpoint.
 - **127.0.0.1:4534** — loopback-only WSJT-X compatibility endpoint.
+- **127.0.0.1:4535** — loopback-only IC-9700 native scope-frame stream used by SkyRoof. This endpoint is binary and deliberately separate from rigctl traffic.
 
 The WSJT-X endpoint implements the Hamlib initialization queries `\\chk_vfo` and
 `\\dump_state`, exposes frequency/mode/PTT reads, and permits CAT PTT. Radio-state
