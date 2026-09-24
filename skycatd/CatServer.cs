@@ -24,6 +24,7 @@ namespace skycatd
     private readonly CatCommandSender commandSender;
     private readonly SerialPort serialPort;
     private readonly object commandLock = new();
+    private Task? ScopeDrainTask;
 
     private PortStatus ComStatus;
     private PortStatus TcpStatus;
@@ -119,8 +120,44 @@ namespace skycatd
       }
     }
 
+    private async Task DrainScopeTrafficLoop()
+    {
+      while (!cts.Token.IsCancellationRequested)
+      {
+        try
+        {
+          if (serialPort.IsOpen && scopeStreamServer.HasClients)
+          {
+            lock (commandLock)
+            {
+              if (serialPort.IsOpen)
+                commandSender.DrainAsynchronousScopeTraffic();
+            }
+
+            await Task.Delay(15, cts.Token);
+          }
+          else
+          {
+            await Task.Delay(100, cts.Token);
+          }
+        }
+        catch (OperationCanceledException)
+        {
+          break;
+        }
+        catch (Exception ex)
+        {
+          logger.LogDebug($"Scope traffic drain paused after error: {ex.Message}");
+          try { await Task.Delay(100, cts.Token); }
+          catch (OperationCanceledException) { break; }
+        }
+      }
+    }
+
     public void Run()
     {
+      ScopeDrainTask ??= Task.Run(DrainScopeTrafficLoop);
+
       while (!cts.Token.IsCancellationRequested)
       {
         if (!serialPort.IsOpen)
@@ -207,6 +244,13 @@ namespace skycatd
       tcpServer.Stop();
       commandSender.ScopeFrameReceived -= scopeStreamServer.Publish;
       if (serialPort.IsOpen) serialPort.Close();
+
+      if (ScopeDrainTask != null)
+      {
+        try { ScopeDrainTask.Wait(500); }
+        catch (AggregateException) { }
+      }
+
       logger.LogInformation("CatServer shutting down.");
     }
 
