@@ -39,6 +39,10 @@ namespace skycatd
         "C" when args.Length == 2 && int.TryParse(args[1], out var toneTenthsHz) => CmdC(toneTenthsHz),
         "U" when args.Length == 3 && args[1] == "TONE" && args[2] == "1" => SendCommandIfAvailable(CatCommand.enable_ctcss),
         "U" when args.Length == 3 && args[1] == "TONE" && args[2] == "0" => SendCommandIfAvailable(CatCommand.disable_ctcss),
+        "U" when args.Length == 3 && args[1] == "SCOPE" && args[2] == "1" => SendCommandIfAvailable(CatCommand.enable_scope),
+        "U" when args.Length == 3 && args[1] == "SCOPE" && args[2] == "0" => SendCommandIfAvailable(CatCommand.disable_scope),
+        "U" when args.Length == 3 && args[1] == "SCOPE_DATA" && args[2] == "1" => SendCommandIfAvailable(CatCommand.enable_scope_data),
+        "U" when args.Length == 3 && args[1] == "SCOPE_DATA" && args[2] == "0" => SendCommandIfAvailable(CatCommand.disable_scope_data),
 
         // setup
         "S" when args.Length == 3 && args[1] == "0" => Setup(OperatingMode.Simplex),
