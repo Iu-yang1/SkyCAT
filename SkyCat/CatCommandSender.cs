@@ -20,6 +20,9 @@ namespace SkyCat
     public readonly SerialPort SerialPort = new();
     public ILogger? Log;
     private OperatingMode OperatingMode;
+    private readonly ScopeFrameTap ScopeTap;
+
+    public event Action<byte[]>? ScopeFrameReceived;
 
     public string[] RadioNames => CommandSets.Keys.ToArray();
     public string? RadioName {get; private set; }
@@ -30,6 +33,7 @@ namespace SkyCat
     public CatCommandSender(ILogger? log = null)
     {
       Log = log;
+      ScopeTap = new ScopeFrameTap(frame => ScopeFrameReceived?.Invoke(frame));
 
       string pathToCommandSets = Path.Combine(AppContext.BaseDirectory, "Rigs");
       ReadCommandSets(pathToCommandSets);
@@ -367,6 +371,7 @@ namespace SkyCat
         if (IsScopeWaveformFrame(frame))
         {
           ignoredScopeFrames++;
+          ScopeFrameReceived?.Invoke(frame);
           continue;
         }
 
@@ -502,6 +507,8 @@ namespace SkyCat
       int received = ReceiveBytes(buffer, 0, availableBytes);
       if (received <= 0) return;
 
+      ScopeTap.Feed(buffer.AsSpan(0, received));
+
       bool containsScope =
         FindSequence(
           buffer.AsSpan(0, received),
@@ -524,6 +531,79 @@ namespace SkyCat
         $"Unexpected bytes received before command: " +
         $"{BitConverter.ToString(preview)}{suffix}");
     }
+
+    private sealed class ScopeFrameTap
+    {
+      private const int MaximumBufferedBytes = 8192;
+      private readonly Action<byte[]> Callback;
+      private readonly List<byte> Buffer = new(1024);
+
+      internal ScopeFrameTap(Action<byte[]> callback)
+      {
+        Callback = callback;
+      }
+
+      internal void Feed(ReadOnlySpan<byte> bytes)
+      {
+        for (int i = 0; i < bytes.Length; i++)
+          Buffer.Add(bytes[i]);
+
+        while (true)
+        {
+          int start = FindPreamble();
+          if (start < 0)
+          {
+            if (Buffer.Count > 0 && Buffer[^1] == 0xFE)
+            {
+              byte tail = Buffer[^1];
+              Buffer.Clear();
+              Buffer.Add(tail);
+            }
+            else
+            {
+              Buffer.Clear();
+            }
+            return;
+          }
+
+          if (start > 0)
+            Buffer.RemoveRange(0, start);
+
+          int end = -1;
+          for (int i = 2; i < Buffer.Count; i++)
+          {
+            if (Buffer[i] == 0xFD)
+            {
+              end = i;
+              break;
+            }
+          }
+
+          if (end < 0)
+          {
+            if (Buffer.Count > MaximumBufferedBytes)
+              Buffer.Clear();
+            return;
+          }
+
+          byte[] frame = Buffer.GetRange(0, end + 1).ToArray();
+          Buffer.RemoveRange(0, end + 1);
+
+          if (IsScopeWaveformFrame(frame))
+            Callback(frame);
+        }
+      }
+
+      private int FindPreamble()
+      {
+        for (int i = 0; i + 1 < Buffer.Count; i++)
+          if (Buffer[i] == 0xFE && Buffer[i + 1] == 0xFE)
+            return i;
+
+        return -1;
+      }
+    }
+
 
     private static int FindSequence(ReadOnlySpan<byte> haystack, ReadOnlySpan<byte> needle)
     {
