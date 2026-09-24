@@ -43,6 +43,7 @@ namespace skycatd
         "U" when args.Length == 3 && args[1] == "SCOPE" && args[2] == "0" => SendCommandIfAvailable(CatCommand.disable_scope),
         "U" when args.Length == 3 && args[1] == "SCOPE_DATA" && args[2] == "1" => SendCommandIfAvailable(CatCommand.enable_scope_data),
         "U" when args.Length == 3 && args[1] == "SCOPE_DATA" && args[2] == "0" => SendCommandIfAvailable(CatCommand.disable_scope_data),
+        "U" when args.Length == 3 && args[1] == "SCOPE_FAST" && args[2] == "1" => SetScopeFast(),
 
         // setup
         "S" when args.Length == 3 && args[1] == "0" => Setup(OperatingMode.Simplex),
@@ -78,6 +79,35 @@ namespace skycatd
     private string CmdT0(string value) => SendCommandIfAvailable(CatCommand.write_ptt_off, value);
     private string CmdT1(string value) => SendCommandIfAvailable(CatCommand.write_ptt_on, value);
     private string CmdC(int toneTenthsHz) => SendCommandIfAvailable(CatCommand.write_ctcss_tone, toneTenthsHz.ToString());
+
+    private string SetScopeFast()
+    {
+      try
+      {
+        CommandSender.SetIcomScopeSweepFast();
+        return "RPRT 0";
+      }
+      catch (InvalidReplyException ex)
+      {
+        CommandSender.Log?.LogError($"Scope speed command rejected: {ex.Message}");
+        return "RPRT -9";
+      }
+      catch (TimeoutException ex)
+      {
+        CommandSender.Log?.LogError($"Scope speed command timed out: {ex.Message}");
+        return "RPRT -5";
+      }
+      catch (InvalidOperationException ex)
+      {
+        CommandSender.Log?.LogError($"Scope speed command failed: {ex.Message}");
+        return "RPRT -6";
+      }
+      catch (Exception ex)
+      {
+        CommandSender.Log?.LogError(ex, "Scope speed command failed.");
+        return "RPRT -7";
+      }
+    }
 
     private string Setup(OperatingMode mode)
     {
