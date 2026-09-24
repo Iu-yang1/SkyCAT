@@ -35,6 +35,11 @@ namespace SkyCat
       Log = log;
       ScopeTap = new ScopeFrameTap(frame => ScopeFrameReceived?.Invoke(frame));
 
+      // Scope output can exceed the default System.IO.Ports receive buffer between
+      // Doppler/CAT transactions. Keep enough headroom for several complete IC-9700
+      // sweeps so the virtual COM driver does not drop sequence chunks.
+      SerialPort.ReadBufferSize = 64 * 1024;
+
       string pathToCommandSets = Path.Combine(AppContext.BaseDirectory, "Rigs");
       ReadCommandSets(pathToCommandSets);
     }
@@ -370,8 +375,9 @@ namespace SkyCat
 
         if (IsScopeWaveformFrame(frame))
         {
+          // The frame has already been delivered by ScopeTap because every byte read
+          // by ReceiveCivFrame is tapped centrally.
           ignoredScopeFrames++;
-          ScopeFrameReceived?.Invoke(frame);
           continue;
         }
 
@@ -418,6 +424,11 @@ namespace SkyCat
 
         if (value < 0) continue;
         byte b = (byte)value;
+
+        // All serial receive paths feed the same scope tap. This prevents a scope
+        // frame from being split across "background drain" and "command reply"
+        // consumers, which previously lost one or more 01..11 scope chunks.
+        ScopeTap.FeedByte(b);
 
         if (!inFrame)
         {
@@ -486,6 +497,10 @@ namespace SkyCat
         {
             int read = SerialPort.Read(buffer, offset + bytesRead, count - bytesRead);
             if (read == 0) break;
+
+            ScopeTap.Feed(
+              new ReadOnlySpan<byte>(buffer, offset + bytesRead, read));
+
             bytesRead += read;
         }
         catch (TimeoutException)
@@ -512,8 +527,6 @@ namespace SkyCat
       byte[] buffer = new byte[availableBytes];
       int received = ReceiveBytes(buffer, 0, availableBytes);
       if (received <= 0) return;
-
-      ScopeTap.Feed(buffer.AsSpan(0, received));
 
       bool containsScope =
         FindSequence(
@@ -549,11 +562,22 @@ namespace SkyCat
         Callback = callback;
       }
 
+      internal void FeedByte(byte value)
+      {
+        Buffer.Add(value);
+        Parse();
+      }
+
       internal void Feed(ReadOnlySpan<byte> bytes)
       {
         for (int i = 0; i < bytes.Length; i++)
           Buffer.Add(bytes[i]);
 
+        Parse();
+      }
+
+      private void Parse()
+      {
         while (true)
         {
           int start = FindPreamble();
