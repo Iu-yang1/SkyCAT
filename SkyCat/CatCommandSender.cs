@@ -148,6 +148,44 @@ namespace SkyCat
 
 
 
+    public void SetIcomScopeSweepFast()
+    {
+      if (!SerialPort.IsOpen)
+        throw new InvalidOperationException("Serial port is not open");
+
+      if (!string.Equals(RadioName, "IC-9700", StringComparison.OrdinalIgnoreCase))
+        throw new InvalidOperationException(
+          $"Scope sweep speed control is only implemented for IC-9700, current radio is '{RadioName}'.");
+
+      // IC-9700 CI-V 27 1A:
+      // receiver 00=MAIN / 01=SUB, speed 00=FAST / 01=MID / 02=SLOW.
+      // Configure both scopes so Auto/MAIN/SUB selection in SkyRoof never inherits
+      // a slow front-panel setting left behind by a previous RS-BA1 session.
+      foreach (byte receiver in new byte[] { 0x00, 0x01 })
+      {
+        var message = new CatMessage
+        {
+          Command = new byte?[]
+          {
+            0xFE, 0xFE, 0xA2, 0xE0,
+            0x27, 0x1A, receiver, 0x00,
+            0xFD
+          },
+          Reply = new byte?[]
+          {
+            0xFE, 0xFE, 0xE0, 0xA2, 0xFB, 0xFD
+          },
+          Comment =
+            receiver == 0
+              ? "MAIN scope sweep speed FAST"
+              : "SUB scope sweep speed FAST"
+        };
+
+        _ = SendMessage(message);
+      }
+    }
+
+
     //----------------------------------------------------------------------------------------------
     //                                send and receive
     //----------------------------------------------------------------------------------------------
