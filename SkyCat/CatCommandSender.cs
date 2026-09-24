@@ -244,6 +244,13 @@ namespace SkyCat
     {
       if (message.Reply == null) return null;
 
+      // Icom CI-V is an asynchronous framed protocol. While a command is waiting for
+      // its FB/FA/query reply, the radio may emit unrelated transceive notifications or
+      // high-rate 27 00 scope waveform frames. Those are not command failures and must
+      // be skipped until the expected FE FE ... FD frame arrives.
+      if (IsCivPattern(message.Reply))
+        return ReceiveCivReply(message, isSetup);
+
       int replyLength = message.Reply.Length;
       int badReplyLength = CommandSet!.BadReply?.Length ?? 0;
 
@@ -304,6 +311,162 @@ namespace SkyCat
 
 
 
+    private string? ReceiveCivReply(CatMessage message, bool isSetup)
+    {
+      const int totalTimeoutMs = 1500;
+      long deadline = Environment.TickCount64 + totalTimeoutMs;
+      int ignoredFrames = 0;
+      int ignoredScopeFrames = 0;
+      byte[]? lastUnexpected = null;
+
+      while (Environment.TickCount64 < deadline)
+      {
+        int remaining = (int)Math.Max(1, deadline - Environment.TickCount64);
+        byte[]? frame = ReceiveCivFrame(remaining);
+        if (frame == null) break;
+
+        if (CommandSet!.BadReply != null &&
+            BytesMatch(frame, CommandSet.BadReply))
+          throw new InvalidReplyException("Command rejected by the radio");
+
+        if (BytesMatch(frame, message.Reply))
+        {
+          string logMessage =
+            $"  Bytes received: {BitConverter.ToString(frame)}";
+          if (ignoredFrames > 0)
+          {
+            logMessage +=
+              $" (ignored {ignoredFrames} unsolicited CI-V frame(s), " +
+              $"{ignoredScopeFrames} scope)";
+          }
+
+          if (isSetup) Log?.LogInformation(logMessage);
+          else Log?.LogTrace(logMessage);
+
+          if (message.ReplyParam == null) return null;
+
+          int paramStart =
+            message.ReplyParam.Start ??
+            Array.IndexOf(message.Reply, null)!;
+          int paramLength =
+            message.ReplyParam.Length ??
+            message.Reply.Count(b => b == null);
+
+          byte[] paramBytes =
+            frame.Skip(paramStart).Take(paramLength).ToArray();
+
+          if (message.ReplyParam.Mask != null)
+            ApplyMask(paramBytes, message.ReplyParam.Mask);
+
+          return BytesToParam(message.ReplyParam, paramBytes);
+        }
+
+        ignoredFrames++;
+        lastUnexpected = frame;
+
+        if (IsScopeWaveformFrame(frame))
+        {
+          ignoredScopeFrames++;
+          continue;
+        }
+
+        // Non-scope unsolicited CI-V frames are useful diagnostics, but they are still
+        // not replies to the current command.
+        Log?.LogTrace(
+          $"  Ignoring unsolicited CI-V frame while waiting for reply: " +
+          $"{BitConverter.ToString(frame)}");
+      }
+
+      string detail =
+        lastUnexpected == null
+          ? "no complete CI-V frame received"
+          : $"last unrelated frame {BitConverter.ToString(lastUnexpected)}";
+
+      throw new TimeoutException(
+        $"Timed out waiting for {NullableBytesToString(message.Reply)}; " +
+        $"ignored {ignoredFrames} unsolicited CI-V frame(s) " +
+        $"({ignoredScopeFrames} scope), {detail}.");
+    }
+
+    private byte[]? ReceiveCivFrame(int timeoutMs)
+    {
+      const int maxFrameLength = 4096;
+      long deadline = Environment.TickCount64 + Math.Max(1, timeoutMs);
+      var frame = new List<byte>(128);
+      bool sawFirstFe = false;
+      bool inFrame = false;
+
+      while (Environment.TickCount64 < deadline)
+      {
+        int remaining = (int)Math.Max(1, deadline - Environment.TickCount64);
+        SerialPort.ReadTimeout = remaining;
+
+        int value;
+        try
+        {
+          value = SerialPort.ReadByte();
+        }
+        catch (TimeoutException)
+        {
+          return null;
+        }
+
+        if (value < 0) continue;
+        byte b = (byte)value;
+
+        if (!inFrame)
+        {
+          if (!sawFirstFe)
+          {
+            sawFirstFe = b == 0xFE;
+            continue;
+          }
+
+          if (b == 0xFE)
+          {
+            frame.Add(0xFE);
+            frame.Add(0xFE);
+            inFrame = true;
+            sawFirstFe = false;
+            continue;
+          }
+
+          // Preserve a possible new first preamble byte.
+          sawFirstFe = b == 0xFE;
+          continue;
+        }
+
+        frame.Add(b);
+
+        if (b == 0xFD)
+          return frame.ToArray();
+
+        if (frame.Count >= maxFrameLength)
+        {
+          Log?.LogWarning(
+            $"Discarding oversized/incomplete CI-V frame ({frame.Count} bytes)");
+          frame.Clear();
+          inFrame = false;
+          sawFirstFe = false;
+        }
+      }
+
+      return null;
+    }
+
+    private static bool IsCivPattern(byte?[] bytes) =>
+      bytes.Length >= 2 &&
+      bytes[0] == 0xFE &&
+      bytes[1] == 0xFE;
+
+    private static bool IsScopeWaveformFrame(byte[] frame) =>
+      frame.Length >= 7 &&
+      frame[0] == 0xFE &&
+      frame[1] == 0xFE &&
+      frame[4] == 0x27 &&
+      frame[5] == 0x00;
+
+
     //----------------------------------------------------------------------------------------------
     //                                    read / write
     //----------------------------------------------------------------------------------------------
@@ -328,15 +491,49 @@ namespace SkyCat
       return bytesRead;
     }
 
-    // ignore bytes, if any, that were previously received 
+    // Ignore bytes that arrived before the new command was sent. With IC-9700
+    // scope output enabled this is normal asynchronous traffic, not an error.
     private void DumpUnexpectedBytes()
     {
       int availableBytes = SerialPort.BytesToRead;
       if (availableBytes == 0) return;
 
       byte[] buffer = new byte[availableBytes];
-      ReceiveBytes(buffer, 0, availableBytes);
-      Log?.LogWarning($"Unexpected bytes received: {BitConverter.ToString(buffer)}");
+      int received = ReceiveBytes(buffer, 0, availableBytes);
+      if (received <= 0) return;
+
+      bool containsScope =
+        FindSequence(
+          buffer.AsSpan(0, received),
+          new byte[] { 0xFE, 0xFE, 0xE0, 0xA2, 0x27, 0x00 }) >= 0;
+
+      if (containsScope)
+      {
+        Log?.LogTrace(
+          $"Discarded {received} byte(s) of pre-command asynchronous CI-V/scope traffic");
+        return;
+      }
+
+      const int previewLength = 64;
+      byte[] preview = buffer.Take(Math.Min(received, previewLength)).ToArray();
+      string suffix = received > previewLength
+        ? $" ... ({received} bytes total)"
+        : string.Empty;
+
+      Log?.LogWarning(
+        $"Unexpected bytes received before command: " +
+        $"{BitConverter.ToString(preview)}{suffix}");
+    }
+
+    private static int FindSequence(ReadOnlySpan<byte> haystack, ReadOnlySpan<byte> needle)
+    {
+      if (needle.Length == 0 || haystack.Length < needle.Length) return -1;
+
+      for (int i = 0; i <= haystack.Length - needle.Length; i++)
+        if (haystack.Slice(i, needle.Length).SequenceEqual(needle))
+          return i;
+
+      return -1;
     }
 
 
