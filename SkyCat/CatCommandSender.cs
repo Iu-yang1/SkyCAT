@@ -27,6 +27,13 @@ namespace SkyCat
     public string[] RadioNames => CommandSets.Keys.ToArray();
     public string? RadioName {get; private set; }
     public bool Transmitting {get; private set; }
+
+    // Observed PTT state is not ownership: read_ptt may report a transmitter
+    // keyed from the front panel or another controller. Track only PTT that
+    // SkyCAT itself requested so shutdown never unkeys an unrelated transmission.
+    private bool PttOwnedByCommand;
+    private bool PttOnAttempted;
+    public bool PttMayBeOwnedByCommand => PttOwnedByCommand || PttOnAttempted;
     
 
 
@@ -199,6 +206,9 @@ namespace SkyCat
 
       string? returnedValue = null;
 
+      if (command == CatCommand.write_ptt_on)
+        PttOnAttempted = true;
+
       try
       {
         string logMessage = $"  Sending command: {command} {paramValue}";
@@ -229,12 +239,37 @@ namespace SkyCat
         Log?.LogDebug($"Alternative command {command} returned '{returnedValue ?? "OK"}'");
       }
 
-      // keep track of the PTT state
-      if (command == CatCommand.write_ptt_off) Transmitting = false;
-      else if (command == CatCommand.write_ptt_on) Transmitting = true;
+      // Keep observed PTT state and SkyCAT ownership separate.
+      if (command == CatCommand.write_ptt_off)
+      {
+        Transmitting = false;
+        PttOwnedByCommand = false;
+        PttOnAttempted = false;
+      }
+      else if (command == CatCommand.write_ptt_on)
+      {
+        Transmitting = true;
+        PttOwnedByCommand = true;
+        PttOnAttempted = false;
+      }
       else if (command == CatCommand.read_ptt)
       {
         Transmitting = returnedValue == "ON";
+
+        if (!Transmitting)
+        {
+          // Hardware RX proves there is no SkyCAT-owned PTT left active.
+          PttOwnedByCommand = false;
+          PttOnAttempted = false;
+        }
+        else if (PttOnAttempted)
+        {
+          // A PTT-ON command can time out after the radio already acted on it.
+          // A later ON readback confirms that our attempted key may be active.
+          PttOwnedByCommand = true;
+          PttOnAttempted = false;
+        }
+
         returnedValue = Transmitting ? "1" : "0";
       }
 
