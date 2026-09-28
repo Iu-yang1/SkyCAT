@@ -76,11 +76,12 @@ namespace SkyCat.Tests
 
       var pttOn = duplex[CatCommand.write_ptt_on].Messages;
       Assert.Equal(
-        new byte?[] { 0xFE, 0xFE, 0xA2, 0xE0, 0x07, 0xD2, 0x00, 0xFD },
+        new byte?[] { 0xFE, 0xFE, 0xA2, 0xE0, 0x1C, 0x00, 0x01, 0xFD },
         pttOn[0].Command);
       Assert.Equal(
-        new byte?[] { 0xFE, 0xFE, 0xA2, 0xE0, 0x1C, 0x00, 0x01, 0xFD },
-        pttOn[1].Command);
+        new byte?[] { 0xFE, 0xFE, 0xA2, 0xE0, 0x07, 0xD2, 0x00, 0xFD },
+        pttOn[^1].Command);
+      Assert.True(pttOn[^1].AlwaysExecute);
 
       var pttOff = duplex[CatCommand.write_ptt_off].Messages;
       Assert.Equal(
