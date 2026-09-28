@@ -614,7 +614,7 @@ namespace SkyCat
         $"{BitConverter.ToString(preview)}{suffix}");
     }
 
-    internal static bool IsZeroPadding(ReadOnlySpan<byte> bytes)
+    public static bool IsZeroPadding(ReadOnlySpan<byte> bytes)
     {
       if (bytes.Length == 0) return false;
 
