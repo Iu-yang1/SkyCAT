@@ -80,14 +80,18 @@ namespace SkyCat.Tests
     }
 
     [Fact]
-    public void Ic9700DuplexTonePrefixesWithSelectSubReceiver()
+    public void Ic9700DuplexToneSelectsSubThenRestoresMainReceiver()
     {
-      // in sat mode the uplink is on the Sub band, so the tone must be set there (like write_tx_*)
+      // In SAT mode the uplink is on SUB, but the operator's audible downlink is
+      // MAIN. Apply the tone to SUB and always restore MAIN focus afterwards.
       var info = Ic9700().Duplex![CatCommand.write_ctcss_tone];
-      Assert.Equal(2, info.Messages.Length);
+      Assert.Equal(3, info.Messages.Length);
       Assert.Equal(
         new byte?[] { 0xFE, 0xFE, 0xA2, 0xE0, 0x07, 0xD2, 0x01, 0xFD },
         info.Messages[0].Command);
+      Assert.Equal(
+        new byte?[] { 0xFE, 0xFE, 0xA2, 0xE0, 0x07, 0xD2, 0x00, 0xFD },
+        info.Messages[^1].Command);
     }
 
 
