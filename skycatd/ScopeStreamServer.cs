@@ -44,16 +44,24 @@ namespace skycatd
     {
       if (IsListening()) return;
 
-      Listener = new TcpListener(IPAddress.Loopback, Port);
-      Listener.Start();
+      var listener = new TcpListener(IPAddress.Loopback, Port);
+      listener.Start();
+      Listener = listener;
 
       _ = Task.Run(async () =>
       {
-        while (Listener != null)
+        while (ReferenceEquals(Listener, listener))
         {
           try
           {
-            TcpClient tcpClient = await Listener.AcceptTcpClientAsync();
+            TcpClient tcpClient = await listener.AcceptTcpClientAsync();
+
+            if (!ReferenceEquals(Listener, listener))
+            {
+              tcpClient.Close();
+              break;
+            }
+
             int id = Interlocked.Increment(ref NextClientId);
             var client = new ScopeClient(tcpClient);
             Clients[id] = client;
@@ -66,13 +74,14 @@ namespace skycatd
           {
             break;
           }
-          catch (SocketException)
+          catch (SocketException ex)
           {
-            if (Listener == null) break;
+            if (!ReferenceEquals(Listener, listener)) break;
+            Logger.LogWarning($"Scope stream accept failed: {ex.Message}");
           }
           catch (Exception ex)
           {
-            if (Listener == null) break;
+            if (!ReferenceEquals(Listener, listener)) break;
             Logger.LogWarning($"Scope stream accept failed: {ex.Message}");
           }
         }
