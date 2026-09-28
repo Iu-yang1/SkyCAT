@@ -89,6 +89,26 @@ namespace SkyCat.Tests
       Assert.Equal(
         new byte?[] { 0xFE, 0xFE, 0xA2, 0xE0, 0x07, 0xD2, 0x00, 0xFD },
         pttOff[^1].Command);
+      Assert.True(pttOff[^1].AlwaysExecute);
+    }
+
+    [Fact]
+    public void AlwaysExecuteFlagDeserializesForCleanupMessages()
+    {
+      var json = CommandSet("""
+        {
+          "messages": [
+            { "command": ["41"] },
+            { "command": ["42"], "always_execute": true }
+          ]
+        }
+        """);
+
+      var commandSet = CatCommandSet.FromJson(json);
+      var messages = commandSet.Simplex[CatCommand.write_rx_mode].Messages;
+
+      Assert.False(messages[0].AlwaysExecute);
+      Assert.True(messages[1].AlwaysExecute);
     }
 
     private static void AssertMainSelectedLast(
@@ -101,6 +121,9 @@ namespace SkyCat.Tests
         messages[^1].Command);
       Assert.Contains("main", messages[^1].Comment ?? string.Empty,
         StringComparison.OrdinalIgnoreCase);
+      Assert.True(
+        messages[^1].AlwaysExecute,
+        $"{label} MAIN restore must execute after an earlier sequence failure.");
     }
 
 
