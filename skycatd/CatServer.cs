@@ -126,15 +126,21 @@ namespace skycatd
       {
         try
         {
-          if (serialPort.IsOpen && scopeStreamServer.HasClients)
+          if (serialPort.IsOpen)
           {
+            // Scope output can remain enabled in the radio after the last 4535
+            // client disconnects. Keep draining asynchronous CI-V traffic even
+            // with no scope subscribers so the SerialPort receive buffer cannot
+            // fill with stale 27 00 frames before the next CAT command.
             lock (commandLock)
             {
-              if (serialPort.IsOpen)
+              if (serialPort.IsOpen && serialPort.BytesToRead > 0)
                 commandSender.DrainAsynchronousScopeTraffic();
             }
 
-            await Task.Delay(15, cts.Token);
+            await Task.Delay(
+              scopeStreamServer.HasClients ? 15 : 50,
+              cts.Token);
           }
           else
           {
@@ -239,9 +245,15 @@ namespace skycatd
         SleepWithCancellation(2000);
       }
 
+      // Stop accepting CAT/PTT commands first, then fail-safe any PTT that
+      // SkyCAT itself asserted before the serial port is closed. TcpServer.Stop()
+      // does not wait for client handler tasks, so relying only on the WSJT-X
+      // disconnect callback can race serialPort.Close().
       wsjtXTcpServer?.Stop();
-      scopeStreamServer.Stop();
       tcpServer.Stop();
+      ReleasePttBeforeSerialClose();
+
+      scopeStreamServer.Stop();
       commandSender.ScopeFrameReceived -= scopeStreamServer.Publish;
       if (serialPort.IsOpen) serialPort.Close();
 
@@ -252,6 +264,31 @@ namespace skycatd
       }
 
       logger.LogInformation("CatServer shutting down.");
+    }
+
+    private void ReleasePttBeforeSerialClose()
+    {
+      lock (commandLock)
+      {
+        if (!serialPort.IsOpen) return;
+
+        // If the WSJT-X proxy owns PTT, clear its ownership state and release it.
+        // EnsurePttOff catches transport errors internally; the sender state below
+        // gives us one final fail-safe attempt for either WSJT-X or the main CAT port.
+        wsjtXInterpreter?.EnsurePttOff();
+
+        if (!commandSender.Transmitting) return;
+
+        try
+        {
+          commandSender.SendCommand(CatCommand.write_ptt_off);
+          logger.LogInformation("Released CAT PTT before SkyCAT shutdown.");
+        }
+        catch (Exception ex)
+        {
+          logger.LogWarning($"Failed to release CAT PTT during shutdown: {ex.Message}");
+        }
+      }
     }
 
     public void Stop()
