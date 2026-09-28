@@ -169,6 +169,27 @@
             "FD"
           ],
           "comment": "sat mode on"
+        },
+        {
+          "comment": "return focus to main/downlink RX",
+          "command": [
+            "FE",
+            "FE",
+            "A2",
+            "E0",
+            "07",
+            "D2",
+            "00",
+            "FD"
+          ],
+          "reply": [
+            "FE",
+            "FE",
+            "E0",
+            "A2",
+            "FB",
+            "FD"
+          ]
         }
       ],
       "restriction": "when_setting_up"
@@ -272,13 +293,34 @@
           "reply_param": {
             "format": "BCD_LE"
           }
+        },
+        {
+          "comment": "return focus to main/downlink RX",
+          "command": [
+            "FE",
+            "FE",
+            "A2",
+            "E0",
+            "07",
+            "D2",
+            "00",
+            "FD"
+          ],
+          "reply": [
+            "FE",
+            "FE",
+            "E0",
+            "A2",
+            "FB",
+            "FD"
+          ]
         }
       ]
     },
     "read_rx_mode": {
       "messages": [
         {
-          "comment": "select sub receiver",
+          "comment": "select main receiver",
           "command": [
             "FE",
             "FE",
@@ -442,6 +484,27 @@
             "04",
             null,
             null,
+            "FD"
+          ]
+        },
+        {
+          "comment": "return focus to main/downlink RX",
+          "command": [
+            "FE",
+            "FE",
+            "A2",
+            "E0",
+            "07",
+            "D2",
+            "00",
+            "FD"
+          ],
+          "reply": [
+            "FE",
+            "FE",
+            "E0",
+            "A2",
+            "FB",
             "FD"
           ]
         }
@@ -651,6 +714,27 @@
           "command_param": {
             "format": "BCD_LE"
           }
+        },
+        {
+          "comment": "return focus to main/downlink RX",
+          "command": [
+            "FE",
+            "FE",
+            "A2",
+            "E0",
+            "07",
+            "D2",
+            "00",
+            "FD"
+          ],
+          "reply": [
+            "FE",
+            "FE",
+            "E0",
+            "A2",
+            "FB",
+            "FD"
+          ]
         }
       ],
       "alt_messages": [
@@ -720,6 +804,27 @@
           "command_param": {
             "format": "BCD_LE"
           }
+        },
+        {
+          "comment": "return focus to main/downlink RX",
+          "command": [
+            "FE",
+            "FE",
+            "A2",
+            "E0",
+            "07",
+            "D2",
+            "00",
+            "FD"
+          ],
+          "reply": [
+            "FE",
+            "FE",
+            "E0",
+            "A2",
+            "FB",
+            "FD"
+          ]
         }
       ]
     },
@@ -1058,6 +1163,27 @@
             "FB",
             "FD"
           ]
+        },
+        {
+          "comment": "return focus to main/downlink RX",
+          "command": [
+            "FE",
+            "FE",
+            "A2",
+            "E0",
+            "07",
+            "D2",
+            "00",
+            "FD"
+          ],
+          "reply": [
+            "FE",
+            "FE",
+            "E0",
+            "A2",
+            "FB",
+            "FD"
+          ]
         }
       ]
     },
@@ -1157,6 +1283,27 @@
           "command_param": {
             "format": "BCD_BE"
           }
+        },
+        {
+          "comment": "return focus to main/downlink RX",
+          "command": [
+            "FE",
+            "FE",
+            "A2",
+            "E0",
+            "07",
+            "D2",
+            "00",
+            "FD"
+          ],
+          "reply": [
+            "FE",
+            "FE",
+            "E0",
+            "A2",
+            "FB",
+            "FD"
+          ]
         }
       ],
       "restriction": "none"
@@ -1204,6 +1351,27 @@
             "FB",
             "FD"
           ]
+        },
+        {
+          "comment": "return focus to main/downlink RX",
+          "command": [
+            "FE",
+            "FE",
+            "A2",
+            "E0",
+            "07",
+            "D2",
+            "00",
+            "FD"
+          ],
+          "reply": [
+            "FE",
+            "FE",
+            "E0",
+            "A2",
+            "FB",
+            "FD"
+          ]
         }
       ],
       "restriction": "none"
@@ -1240,6 +1408,27 @@
             "E0",
             "16",
             "42",
+            "00",
+            "FD"
+          ],
+          "reply": [
+            "FE",
+            "FE",
+            "E0",
+            "A2",
+            "FB",
+            "FD"
+          ]
+        },
+        {
+          "comment": "return focus to main/downlink RX",
+          "command": [
+            "FE",
+            "FE",
+            "A2",
+            "E0",
+            "07",
+            "D2",
             "00",
             "FD"
           ],
