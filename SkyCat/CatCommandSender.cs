@@ -383,7 +383,16 @@ namespace SkyCat
 
         if (CommandSet!.BadReply != null &&
             BytesMatch(frame, CommandSet.BadReply))
+        {
+          if (message.IgnoreError)
+          {
+            Log?.LogDebug(
+              $"  Ignoring expected CI-V command rejection: {BitConverter.ToString(frame)}");
+            return null;
+          }
+
           throw new InvalidReplyException("Command rejected by the radio");
+        }
 
         if (BytesMatch(frame, message.Reply))
         {
