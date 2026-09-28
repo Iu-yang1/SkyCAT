@@ -6,14 +6,14 @@ namespace skycatd
   /// Tracks PTT asserted by one main CAT TCP connection. A disconnect only
   /// releases PTT that this connection successfully asserted.
   /// </summary>
-  internal sealed class PttCommandSession
+  public sealed class PttCommandSession
   {
     private readonly Func<string, string> Forward;
     private readonly ILogger? Logger;
     private readonly string Name;
     private bool PttAsserted;
 
-    internal PttCommandSession(
+    public PttCommandSession(
       Func<string, string> forward,
       ILogger? logger = null,
       string name = "CAT")
@@ -23,7 +23,7 @@ namespace skycatd
       Name = name;
     }
 
-    internal string Execute(string command)
+    public string Execute(string command)
     {
       string reply = Forward(command);
       string[] args = command.Split(' ', StringSplitOptions.RemoveEmptyEntries);
@@ -37,7 +37,7 @@ namespace skycatd
       return reply;
     }
 
-    internal void EnsurePttOff()
+    public void EnsurePttOff()
     {
       if (!PttAsserted) return;
 
