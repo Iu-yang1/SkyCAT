@@ -46,11 +46,15 @@ namespace skycatd
       scopeStreamServer = new ScopeStreamServer(options.ScopePort, logger);
       commandSender.ScopeFrameReceived += scopeStreamServer.Publish;
 
+      IPAddress catListenAddress = options.AllowRemote
+        ? IPAddress.Any
+        : IPAddress.Loopback;
+
       tcpServer = new TcpServer(
         options.Port,
         commandInterpreter.Execute,
         logger,
-        IPAddress.Any,
+        catListenAddress,
         commandLock,
         serverName: "CAT",
         clientSessionFactory: () =>
@@ -207,7 +211,8 @@ namespace skycatd
             if (TcpStatus == PortStatus.WasOpen) logger.LogInformation("CAT TCP server stopped unexpectedly. Restarting.");
             tcpServer.Start();
             TcpStatus = PortStatus.WasOpen;
-            logger.LogInformation($"CAT TCP server started on 0.0.0.0:{options.Port}.");
+            string host = options.AllowRemote ? "0.0.0.0" : "127.0.0.1";
+            logger.LogInformation($"CAT TCP server started on {host}:{options.Port}.");
           }
           catch (Exception ex)
           {

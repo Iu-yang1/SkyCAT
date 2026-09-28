@@ -22,6 +22,11 @@ namespace skycatd
     [Range(1, 65535, ErrorMessage = "Port must be between 1 and 65535")]
     public int Port { get; set; }
 
+    [Option("allow-remote", Required = false,
+      HelpText = "Allow the main CAT server to listen on all interfaces. By default it is loopback-only.",
+      Default = false)]
+    public bool AllowRemote { get; set; }
+
     [Option("wsjtx-port", Required = false, HelpText = "Loopback-only WSJT-X Hamlib NET rigctl compatibility port.", Default = 4534)]
     [Range(1, 65535, ErrorMessage = "WSJT-X port must be between 1 and 65535")]
     public int WsjtXPort { get; set; }
