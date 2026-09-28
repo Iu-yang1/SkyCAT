@@ -20,7 +20,6 @@ namespace skycatd
     private readonly TcpServer? wsjtXTcpServer;
     private readonly ScopeStreamServer scopeStreamServer;
     private readonly CommandInterpreter commandInterpreter;
-    private readonly WsjtXCommandInterpreter? wsjtXInterpreter;
     private readonly CatCommandSender commandSender;
     private readonly SerialPort serialPort;
     private readonly object commandLock = new();
@@ -53,19 +52,27 @@ namespace skycatd
         logger,
         IPAddress.Any,
         commandLock,
-        serverName: "CAT");
+        serverName: "CAT",
+        clientSessionFactory: () =>
+        {
+          var session = new PttCommandSession(commandInterpreter.Execute, logger, "CAT");
+          return new TcpClientSession(session.Execute, session.EnsurePttOff);
+        });
 
       if (!options.DisableWsjtXProxy)
       {
-        wsjtXInterpreter = new WsjtXCommandInterpreter(commandInterpreter.Execute, logger);
         wsjtXTcpServer = new TcpServer(
           options.WsjtXPort,
-          wsjtXInterpreter.Execute,
+          commandInterpreter.Execute,
           logger,
           IPAddress.Loopback,
           commandLock,
-          wsjtXInterpreter.EnsurePttOff,
-          "WSJT-X proxy");
+          serverName: "WSJT-X proxy",
+          clientSessionFactory: () =>
+          {
+            var session = new WsjtXCommandInterpreter(commandInterpreter.Execute, logger);
+            return new TcpClientSession(session.Execute, session.EnsurePttOff);
+          });
       }
     }
 
@@ -271,10 +278,9 @@ namespace skycatd
 
       lock (commandLock)
       {
-        // This clears the proxy's ownership flag and forwards T 0 if WSJT-X
-        // asserted PTT. The command sender state is updated by that operation.
-        wsjtXInterpreter?.EnsurePttOff();
-
+        // Per-client CAT/WSJT-X ownership has already been released by
+        // TcpServer.Stop(). This is the final sender-level safety net for a
+        // timed-out or otherwise ambiguous PTT-ON attempt.
         if (!commandSender.PttMayBeOwnedByCommand)
           return;
 
