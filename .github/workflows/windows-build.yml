@@ -14,15 +14,24 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Setup .NET 9
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
           dotnet-version: 9.0.x
 
       - name: Restore
-        run: dotnet restore SkyCat.sln
+        run: dotnet restore SkyCat.sln --use-lock-file
+
+      - name: Dump NuGet lock files
+        shell: pwsh
+        run: |
+          Get-ChildItem -Path . -Filter packages.lock.json -Recurse | ForEach-Object {
+            Write-Host "LOCKFILE_BEGIN=$($_.FullName.Substring($env:GITHUB_WORKSPACE.Length + 1).Replace('\','/'))"
+            Get-Content $_.FullName -Raw
+            Write-Host "LOCKFILE_END"
+          }
 
       - name: Test
         run: dotnet test SkyCat.sln -c Release --no-restore
@@ -31,7 +40,7 @@ jobs:
         run: dotnet publish skycatd/skycatd.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o artifacts/skycatd-win-x64
 
       - name: Upload Windows artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: skycatd-wsjtx-win-x64
           path: artifacts/skycatd-win-x64
