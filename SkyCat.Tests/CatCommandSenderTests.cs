@@ -79,6 +79,24 @@ namespace SkyCat.Tests
       Assert.Contains("TS-2000", json);
     }
 
+    [Theory]
+    [InlineData(new byte[] { 0x00 })]
+    [InlineData(new byte[] { 0x00, 0x00, 0x00, 0x00 })]
+    public void ZeroOnlyTransportPaddingIsBenign(byte[] bytes)
+    {
+      Assert.True(CatCommandSender.IsZeroPadding(bytes));
+    }
+
+    [Theory]
+    [InlineData(new byte[] { })]
+    [InlineData(new byte[] { 0x00, 0xFE, 0x00 })]
+    [InlineData(new byte[] { 0xFD })]
+    public void NonZeroOrEmptyTransportDataIsNotZeroPadding(byte[] bytes)
+    {
+      Assert.False(CatCommandSender.IsZeroPadding(bytes));
+    }
+
+
     [Fact]
     public void CommandsAreUnavailableBeforeSetup()
     {
