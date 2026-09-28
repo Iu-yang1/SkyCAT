@@ -68,18 +68,27 @@ namespace SkyCat.Tests
     }
 
     [Fact]
-    public void Ic9700DuplexPttDoesNotChangeMainSubSelection()
+    public void Ic9700DuplexPttKeepsMainDownlinkSelected()
     {
       var path = Path.Combine(AppContext.BaseDirectory, "Rigs", "IC-9700.json");
       var commandSet = CatCommandSet.FromJson(File.ReadAllText(path));
       var duplex = Assert.IsType<CatCommandSet.CatCommandGroup>(commandSet.Duplex);
 
+      var pttOn = duplex[CatCommand.write_ptt_on].Messages;
+      Assert.Equal(
+        new byte?[] { 0xFE, 0xFE, 0xA2, 0xE0, 0x07, 0xD2, 0x00, 0xFD },
+        pttOn[0].Command);
       Assert.Equal(
         new byte?[] { 0xFE, 0xFE, 0xA2, 0xE0, 0x1C, 0x00, 0x01, 0xFD },
-        duplex[CatCommand.write_ptt_on].Messages.Single().Command);
+        pttOn[1].Command);
+
+      var pttOff = duplex[CatCommand.write_ptt_off].Messages;
       Assert.Equal(
         new byte?[] { 0xFE, 0xFE, 0xA2, 0xE0, 0x1C, 0x00, 0x00, 0xFD },
-        duplex[CatCommand.write_ptt_off].Messages.Single().Command);
+        pttOff[0].Command);
+      Assert.Equal(
+        new byte?[] { 0xFE, 0xFE, 0xA2, 0xE0, 0x07, 0xD2, 0x00, 0xFD },
+        pttOff[^1].Command);
     }
 
     private static void AssertMainSelectedLast(
