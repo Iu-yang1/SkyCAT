@@ -126,15 +126,21 @@ namespace skycatd
       {
         try
         {
-          if (serialPort.IsOpen && scopeStreamServer.HasClients)
+          if (serialPort.IsOpen)
           {
+            // The radio can keep emitting asynchronous 27 00 scope frames after
+            // the last TCP/4535 client disconnects. Continue draining the serial
+            // transport so stale waveform data cannot accumulate ahead of the
+            // next synchronous CAT reply.
             lock (commandLock)
             {
-              if (serialPort.IsOpen)
+              if (serialPort.IsOpen && serialPort.BytesToRead > 0)
                 commandSender.DrainAsynchronousScopeTraffic();
             }
 
-            await Task.Delay(15, cts.Token);
+            await Task.Delay(
+              scopeStreamServer.HasClients ? 15 : 50,
+              cts.Token);
           }
           else
           {

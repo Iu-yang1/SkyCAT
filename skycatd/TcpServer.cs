@@ -41,32 +41,56 @@ namespace skycatd
     {
       if (IsListening()) return;
 
+      TcpListener? listener = null;
+
       try
       {
-        Listener = new TcpListener(ListenAddress, Port);
-        Listener.Start();
+        listener = new TcpListener(ListenAddress, Port);
+        listener.Start();
+        Listener = listener;
 
-        // start accepting clients in the background
-        Task.Run(async () =>
+        // Bind this accept loop to the exact listener instance that created it.
+        // Stop()/Start() may replace Listener; an old task must never begin
+        // accepting from the new listener as a second competing loop.
+        _ = Task.Run(async () =>
         {
-          while (Listener != null)
+          while (ReferenceEquals(Listener, listener))
+          {
             try
             {
-              var client = await Listener.AcceptTcpClientAsync();
+              TcpClient client = await listener.AcceptTcpClientAsync();
+
+              if (!ReferenceEquals(Listener, listener))
+              {
+                client.Close();
+                break;
+              }
+
               _ = Task.Run(() => HandleClient(client));
+            }
+            catch (ObjectDisposedException)
+            {
+              break;
+            }
+            catch (SocketException ex)
+            {
+              if (!ReferenceEquals(Listener, listener)) break;
+              Logger.LogError($"{ServerName} accept failed: {ex.Message}");
             }
             catch (Exception ex)
             {
-              // Stop() called
-              if (Listener == null) break;
-              // failure
-              else Logger.LogError($"{ServerName} server stopped: {ex.Message}");
+              if (!ReferenceEquals(Listener, listener)) break;
+              Logger.LogError($"{ServerName} accept failed: {ex.Message}");
             }
+          }
         });
       }
-      catch (Exception)
+      catch
       {
-        Listener = null;
+        if (ReferenceEquals(Listener, listener))
+          Listener = null;
+
+        try { listener?.Stop(); } catch { }
         throw;
       }
     }
@@ -143,19 +167,20 @@ namespace skycatd
 
     public void Stop()
     {
-      // Close tracked clients even if the listener has already failed. The old
-      // ConcurrentBag bookkeeping could remove an arbitrary connection on
-      // disconnect and leave live sockets behind.
-      foreach (var client in ActiveClients.Values)
-        try
-        {
-          client.Close();
-        }
-        catch { }
-      ActiveClients.Clear();
-
-      try { Listener?.Stop(); } catch { }
+      TcpListener? listener = Listener;
       Listener = null;
+
+      try { listener?.Stop(); } catch { }
+
+      // Close tracked clients even if the listener has already failed.
+      foreach (var entry in ActiveClients.ToArray())
+      {
+        if (!ActiveClients.TryRemove(entry.Key, out TcpClient? client))
+          continue;
+
+        try { client.Close(); } catch { }
+      }
+
       Logger.LogInformation($"{ServerName} server stopped.");
     }
 
