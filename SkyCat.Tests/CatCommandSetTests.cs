@@ -41,6 +41,61 @@ namespace SkyCat.Tests
     }
 
     [Fact]
+    public void Ic9700DuplexTxSideCommandsRestoreMainDownlinkFocus()
+    {
+      var path = Path.Combine(AppContext.BaseDirectory, "Rigs", "IC-9700.json");
+      var commandSet = CatCommandSet.FromJson(File.ReadAllText(path));
+      var duplex = Assert.IsType<CatCommandSet.CatCommandGroup>(commandSet.Duplex);
+
+      foreach (CatCommand command in new[]
+      {
+        CatCommand.read_tx_frequency,
+        CatCommand.read_tx_mode,
+        CatCommand.write_tx_frequency,
+        CatCommand.write_tx_mode,
+        CatCommand.write_ctcss_tone,
+        CatCommand.enable_ctcss,
+        CatCommand.disable_ctcss,
+      })
+      {
+        AssertMainSelectedLast(duplex[command].Messages, command.ToString());
+
+        if (duplex[command].AltMessages != null)
+          AssertMainSelectedLast(duplex[command].AltMessages!, command + " alt");
+      }
+
+      AssertMainSelectedLast(duplex[CatCommand.setup].Messages, "setup");
+    }
+
+    [Fact]
+    public void Ic9700DuplexPttDoesNotChangeMainSubSelection()
+    {
+      var path = Path.Combine(AppContext.BaseDirectory, "Rigs", "IC-9700.json");
+      var commandSet = CatCommandSet.FromJson(File.ReadAllText(path));
+      var duplex = Assert.IsType<CatCommandSet.CatCommandGroup>(commandSet.Duplex);
+
+      Assert.Equal(
+        new byte?[] { 0xFE, 0xFE, 0xA2, 0xE0, 0x1C, 0x00, 0x01, 0xFD },
+        duplex[CatCommand.write_ptt_on].Messages.Single().Command);
+      Assert.Equal(
+        new byte?[] { 0xFE, 0xFE, 0xA2, 0xE0, 0x1C, 0x00, 0x00, 0xFD },
+        duplex[CatCommand.write_ptt_off].Messages.Single().Command);
+    }
+
+    private static void AssertMainSelectedLast(
+      CatCommandSet.CatMessage[] messages,
+      string label)
+    {
+      Assert.NotEmpty(messages);
+      Assert.Equal(
+        new byte?[] { 0xFE, 0xFE, 0xA2, 0xE0, 0x07, 0xD2, 0x00, 0xFD },
+        messages[^1].Command);
+      Assert.Contains("main", messages[^1].Comment ?? string.Empty,
+        StringComparison.OrdinalIgnoreCase);
+    }
+
+
+    [Fact]
     public void RigFolderIsNotEmpty()
     {
       var dir = Path.Combine(AppContext.BaseDirectory, "Rigs");
