@@ -17,7 +17,7 @@ namespace skycatd
     private readonly Action? ClientDisconnected;
     private readonly string ServerName;
     private TcpListener? Listener;
-    private readonly ConcurrentBag<TcpClient> ActiveClients = new();
+    private readonly ConcurrentDictionary<int, TcpClient> ActiveClients = new();
 
     public TcpServer(
       int port,
@@ -76,7 +76,7 @@ namespace skycatd
     private void HandleClient(TcpClient client)
     {
       int id = Interlocked.Increment(ref NextId) - 1;
-      ActiveClients.Add(client);
+      ActiveClients[id] = client;
       var endPoint = client.Client.RemoteEndPoint;
       Logger.LogInformation($"{ServerName} client #{id} connected: {endPoint} ({ActiveClients.Count} connected clients)");
 
@@ -109,7 +109,7 @@ namespace skycatd
       finally
       {
         client.Close();
-        ActiveClients.TryTake(out _);
+        ActiveClients.TryRemove(id, out _);
 
         if (ClientDisconnected != null)
           try
@@ -143,9 +143,10 @@ namespace skycatd
 
     public void Stop()
     {
-      if (!IsListening()) return;
-
-      foreach (var client in ActiveClients)
+      // Close tracked clients even if the listener has already failed. The old
+      // ConcurrentBag bookkeeping could remove an arbitrary connection on
+      // disconnect and leave live sockets behind.
+      foreach (var client in ActiveClients.Values)
         try
         {
           client.Close();
@@ -153,7 +154,7 @@ namespace skycatd
         catch { }
       ActiveClients.Clear();
 
-      Listener?.Stop();
+      try { Listener?.Stop(); } catch { }
       Listener = null;
       Logger.LogInformation($"{ServerName} server stopped.");
     }

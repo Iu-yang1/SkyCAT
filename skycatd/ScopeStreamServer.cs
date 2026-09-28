@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
+using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 
 namespace skycatd
@@ -9,20 +10,81 @@ namespace skycatd
   {
     private sealed class ScopeClient
     {
-      internal readonly TcpClient Client;
-      internal readonly NetworkStream Stream;
-      internal readonly object WriteLock = new();
+      private readonly TcpClient Client;
+      private readonly NetworkStream Stream;
+      private readonly Channel<byte[]> Frames;
+      private readonly CancellationTokenSource Cancellation = new();
+      private Task? SenderTask;
+      private int Disposed;
 
       internal ScopeClient(TcpClient client)
       {
         Client = client;
         Client.NoDelay = true;
-        Client.SendTimeout = 100;
         Stream = client.GetStream();
+
+        // Scope is a live display, not a lossless recording stream. Keep only a
+        // few recent frames so a paused/non-reading client can never backpressure
+        // the serial CI-V parser or the shared CAT command lock.
+        Frames = Channel.CreateBounded<byte[]>(
+          new BoundedChannelOptions(3)
+          {
+            SingleReader = true,
+            SingleWriter = false,
+            FullMode = BoundedChannelFullMode.DropOldest
+          });
+      }
+
+      internal void Start(Action<Exception?> disconnected)
+      {
+        SenderTask = Task.Run(() => SendLoop(disconnected));
+      }
+
+      internal bool TryPublish(byte[] frame) =>
+        Frames.Writer.TryWrite(frame);
+
+      private async Task SendLoop(Action<Exception?> disconnected)
+      {
+        Exception? failure = null;
+
+        try
+        {
+          await foreach (byte[] frame in
+            Frames.Reader.ReadAllAsync(Cancellation.Token))
+          {
+            byte[] header =
+            {
+              (byte)(frame.Length & 0xFF),
+              (byte)((frame.Length >> 8) & 0xFF),
+              (byte)((frame.Length >> 16) & 0xFF),
+              (byte)((frame.Length >> 24) & 0xFF)
+            };
+
+            await Stream.WriteAsync(header, Cancellation.Token);
+            await Stream.WriteAsync(frame, Cancellation.Token);
+          }
+        }
+        catch (OperationCanceledException)
+        {
+          // Normal Stop()/disconnect path.
+        }
+        catch (Exception ex)
+        {
+          failure = ex;
+        }
+        finally
+        {
+          disconnected(failure);
+        }
       }
 
       internal void Dispose()
       {
+        if (Interlocked.Exchange(ref Disposed, 1) != 0)
+          return;
+
+        Frames.Writer.TryComplete();
+        try { Cancellation.Cancel(); } catch { }
         try { Stream.Dispose(); } catch { }
         try { Client.Close(); } catch { }
       }
@@ -57,6 +119,7 @@ namespace skycatd
             int id = Interlocked.Increment(ref NextClientId);
             var client = new ScopeClient(tcpClient);
             Clients[id] = client;
+            client.Start(error => RemoveClient(id, error));
 
             Logger.LogInformation(
               $"Scope stream client #{id} connected: {tcpClient.Client.RemoteEndPoint} " +
@@ -84,36 +147,28 @@ namespace skycatd
       if (frame == null || frame.Length == 0 || Clients.IsEmpty)
         return;
 
-      Span<byte> header = stackalloc byte[4];
-      int length = frame.Length;
-      header[0] = (byte)(length & 0xFF);
-      header[1] = (byte)((length >> 8) & 0xFF);
-      header[2] = (byte)((length >> 16) & 0xFF);
-      header[3] = (byte)((length >> 24) & 0xFF);
-
+      // Never perform socket I/O on the serial/CAT thread. Each client has a
+      // bounded queue and its own sender; when a client cannot keep up, older
+      // spectrum frames are discarded in favor of current display data.
       foreach (var entry in Clients.ToArray())
-      {
-        ScopeClient client = entry.Value;
+        if (!entry.Value.TryPublish(frame))
+          RemoveClient(entry.Key, null);
+    }
 
-        try
-        {
-          lock (client.WriteLock)
-          {
-            client.Stream.Write(header);
-            client.Stream.Write(frame, 0, frame.Length);
-          }
-        }
-        catch (Exception)
-        {
-          if (Clients.TryRemove(entry.Key, out ScopeClient? removed))
-          {
-            removed.Dispose();
-            Logger.LogInformation(
-              $"Scope stream client #{entry.Key} disconnected " +
-              $"({Clients.Count} connected clients)");
-          }
-        }
-      }
+    private void RemoveClient(int id, Exception? error)
+    {
+      if (!Clients.TryRemove(id, out ScopeClient? client))
+        return;
+
+      client.Dispose();
+
+      if (error != null)
+        Logger.LogDebug(
+          $"Scope stream client #{id} sender stopped: {error.Message}");
+
+      Logger.LogInformation(
+        $"Scope stream client #{id} disconnected " +
+        $"({Clients.Count} connected clients)");
     }
 
     internal void Stop()
@@ -124,10 +179,7 @@ namespace skycatd
       try { listener?.Stop(); } catch { }
 
       foreach (var entry in Clients.ToArray())
-      {
-        if (Clients.TryRemove(entry.Key, out ScopeClient? client))
-          client.Dispose();
-      }
+        RemoveClient(entry.Key, null);
 
       Logger.LogInformation("Scope stream server stopped.");
     }

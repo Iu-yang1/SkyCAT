@@ -207,11 +207,12 @@ namespace SkyCat
         // Send every message in the command sequence. Keep the first parsed
         // return value, but never let a non-null query result suppress trailing
         // cleanup/focus messages (for example: read SUB, then restore MAIN).
-        foreach (var message in commandInfo.Messages)
-        {
-          string? messageValue = SendMessage(message, paramValue, isSetup);
-          returnedValue ??= messageValue;
-        }
+        // If a message fails, messages explicitly marked AlwaysExecute are still
+        // attempted before the original exception is rethrown.
+        returnedValue = SendMessageSequence(
+          commandInfo.Messages,
+          paramValue,
+          isSetup);
 
         logMessage = $"  Command {command} returned '{returnedValue ?? "OK"}'";
         if (isSetup) Log?.LogInformation(logMessage); else Log?.LogDebug(logMessage);
@@ -221,12 +222,10 @@ namespace SkyCat
         if (commandInfo.AltMessages == null) throw;
 
         Log?.LogWarning($"Command {command} rejected by the radio. Trying alternative command.");
-        returnedValue = null;
-        foreach (var altMessage in commandInfo.AltMessages)
-        {
-          string? messageValue = SendMessage(altMessage, paramValue, isSetup);
-          returnedValue ??= messageValue;
-        }
+        returnedValue = SendMessageSequence(
+          commandInfo.AltMessages,
+          paramValue,
+          isSetup);
         Log?.LogDebug($"Alternative command {command} returned '{returnedValue ?? "OK"}'");
       }
 
@@ -237,6 +236,50 @@ namespace SkyCat
       {
         Transmitting = returnedValue == "ON";
         returnedValue = Transmitting ? "1" : "0";
+      }
+
+      return returnedValue;
+    }
+
+    private string? SendMessageSequence(
+      CatMessage[] messages,
+      string? paramValue,
+      bool isSetup)
+    {
+      string? returnedValue = null;
+
+      for (int i = 0; i < messages.Length; i++)
+      {
+        try
+        {
+          string? messageValue = SendMessage(messages[i], paramValue, isSetup);
+          returnedValue ??= messageValue;
+        }
+        catch
+        {
+          // A TX-side query/write may have already selected SUB before failing.
+          // Do not leave the radio in that intermediate state: run only explicitly
+          // designated cleanup messages and preserve the original failure.
+          for (int j = i + 1; j < messages.Length; j++)
+          {
+            CatMessage cleanup = messages[j];
+            if (!cleanup.AlwaysExecute) continue;
+
+            try
+            {
+              _ = SendMessage(cleanup, paramValue, isSetup);
+            }
+            catch (Exception cleanupEx)
+            {
+              Log?.LogWarning(
+                cleanupEx,
+                "CAT cleanup message failed after an earlier command-sequence error: {Comment}",
+                cleanup.Comment ?? "<no comment>");
+            }
+          }
+
+          throw;
+        }
       }
 
       return returnedValue;

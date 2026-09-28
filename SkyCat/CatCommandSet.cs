@@ -141,6 +141,12 @@ namespace SkyCat
 
       [JsonProperty("ignore_error")]
       public bool IgnoreError { get; set; }
+
+      // A cleanup/focus message that must still run when an earlier message in the
+      // same command sequence fails. Used by duplex radios to restore a safe VFO/band
+      // selection after a timeout or rejected TX-side operation.
+      [JsonProperty("always_execute")]
+      public bool AlwaysExecute { get; set; }
     }
 
     public class ParamInfo

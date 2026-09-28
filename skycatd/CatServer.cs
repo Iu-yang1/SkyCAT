@@ -239,9 +239,14 @@ namespace skycatd
         SleepWithCancellation(2000);
       }
 
+      // Stop accepting/reading control clients before touching radio state.
+      // Then release any CAT PTT asserted through either the WSJT-X proxy or the
+      // main SkyCAT command endpoint while the serial port is still available.
       wsjtXTcpServer?.Stop();
-      scopeStreamServer.Stop();
       tcpServer.Stop();
+      ReleasePttBeforeShutdown();
+
+      scopeStreamServer.Stop();
       commandSender.ScopeFrameReceived -= scopeStreamServer.Publish;
       if (serialPort.IsOpen) serialPort.Close();
 
@@ -252,6 +257,33 @@ namespace skycatd
       }
 
       logger.LogInformation("CatServer shutting down.");
+    }
+
+    private void ReleasePttBeforeShutdown()
+    {
+      if (!serialPort.IsOpen) return;
+
+      lock (commandLock)
+      {
+        // This clears the proxy's ownership flag and forwards T 0 if WSJT-X
+        // asserted PTT. The command sender state is updated by that operation.
+        wsjtXInterpreter?.EnsurePttOff();
+
+        if (!commandSender.Transmitting ||
+            !commandSender.IsCommandAvailable(CatCommand.write_ptt_off))
+          return;
+
+        try
+        {
+          commandSender.SendCommand(CatCommand.write_ptt_off);
+          logger.LogInformation("Released CAT PTT before serial-port shutdown.");
+        }
+        catch (Exception ex)
+        {
+          logger.LogWarning(
+            $"Failed to release CAT PTT before serial-port shutdown: {ex.Message}");
+        }
+      }
     }
 
     public void Stop()
