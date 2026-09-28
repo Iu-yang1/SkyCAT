@@ -17,7 +17,7 @@ namespace skycatd
     private readonly Action? ClientDisconnected;
     private readonly string ServerName;
     private TcpListener? Listener;
-    private readonly ConcurrentBag<TcpClient> ActiveClients = new();
+    private readonly ConcurrentDictionary<int, TcpClient> ActiveClients = new();
 
     public TcpServer(
       int port,
@@ -41,32 +41,56 @@ namespace skycatd
     {
       if (IsListening()) return;
 
+      TcpListener? listener = null;
+
       try
       {
-        Listener = new TcpListener(ListenAddress, Port);
-        Listener.Start();
+        listener = new TcpListener(ListenAddress, Port);
+        listener.Start();
+        Listener = listener;
 
-        // start accepting clients in the background
-        Task.Run(async () =>
+        // Capture the listener instance in this accept loop. If Stop() followed by
+        // Start() replaces Listener, the old task must never begin accepting on the
+        // new listener as well.
+        _ = Task.Run(async () =>
         {
-          while (Listener != null)
+          while (ReferenceEquals(Listener, listener))
+          {
             try
             {
-              var client = await Listener.AcceptTcpClientAsync();
+              var client = await listener.AcceptTcpClientAsync();
+
+              if (!ReferenceEquals(Listener, listener))
+              {
+                client.Close();
+                break;
+              }
+
               _ = Task.Run(() => HandleClient(client));
+            }
+            catch (ObjectDisposedException)
+            {
+              break;
+            }
+            catch (SocketException ex)
+            {
+              if (!ReferenceEquals(Listener, listener)) break;
+              Logger.LogError($"{ServerName} accept failed: {ex.Message}");
             }
             catch (Exception ex)
             {
-              // Stop() called
-              if (Listener == null) break;
-              // failure
-              else Logger.LogError($"{ServerName} server stopped: {ex.Message}");
+              if (!ReferenceEquals(Listener, listener)) break;
+              Logger.LogError($"{ServerName} accept failed: {ex.Message}");
             }
+          }
         });
       }
-      catch (Exception)
+      catch
       {
-        Listener = null;
+        if (ReferenceEquals(Listener, listener))
+          Listener = null;
+
+        try { listener?.Stop(); } catch { }
         throw;
       }
     }
@@ -76,7 +100,7 @@ namespace skycatd
     private void HandleClient(TcpClient client)
     {
       int id = Interlocked.Increment(ref NextId) - 1;
-      ActiveClients.Add(client);
+      ActiveClients[id] = client;
       var endPoint = client.Client.RemoteEndPoint;
       Logger.LogInformation($"{ServerName} client #{id} connected: {endPoint} ({ActiveClients.Count} connected clients)");
 
@@ -108,8 +132,14 @@ namespace skycatd
       }
       finally
       {
-        client.Close();
-        ActiveClients.TryTake(out _);
+        if (ActiveClients.TryRemove(id, out TcpClient? trackedClient))
+        {
+          try { trackedClient.Close(); } catch { }
+        }
+        else
+        {
+          try { client.Close(); } catch { }
+        }
 
         if (ClientDisconnected != null)
           try
@@ -122,6 +152,7 @@ namespace skycatd
           }
 
         Logger.LogInformation($"{ServerName} client #{id} disconnected: {endPoint} ({ActiveClients.Count} connected clients)");
+
       }
     }
 
@@ -143,18 +174,20 @@ namespace skycatd
 
     public void Stop()
     {
-      if (!IsListening()) return;
+      TcpListener? listener = Listener;
+      if (listener == null) return;
 
-      foreach (var client in ActiveClients)
-        try
-        {
-          client.Close();
-        }
-        catch { }
-      ActiveClients.Clear();
-
-      Listener?.Stop();
       Listener = null;
+      try { listener.Stop(); } catch { }
+
+      foreach (var entry in ActiveClients.ToArray())
+      {
+        if (!ActiveClients.TryRemove(entry.Key, out TcpClient? client))
+          continue;
+
+        try { client.Close(); } catch { }
+      }
+
       Logger.LogInformation($"{ServerName} server stopped.");
     }
 
