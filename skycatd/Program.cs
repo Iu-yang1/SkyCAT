@@ -41,7 +41,23 @@ namespace skycatd
           Console.Error.WriteLine($"Error creating server: {ex.Message}");
           Environment.Exit(1);
         }
-        server.Run();
+        if (server == null) return;
+
+        ConsoleCancelEventHandler cancelHandler = (_, e) =>
+        {
+          e.Cancel = true;
+          server.Stop();
+        };
+
+        Console.CancelKeyPress += cancelHandler;
+        try
+        {
+          server.Run();
+        }
+        finally
+        {
+          Console.CancelKeyPress -= cancelHandler;
+        }
       }
     }
   }
