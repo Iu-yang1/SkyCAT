@@ -1242,27 +1242,6 @@
     "write_ptt_on": {
       "messages": [
         {
-          "comment": "select main/downlink RX before or after PTT",
-          "command": [
-            "FE",
-            "FE",
-            "A2",
-            "E0",
-            "07",
-            "D2",
-            "00",
-            "FD"
-          ],
-          "reply": [
-            "FE",
-            "FE",
-            "E0",
-            "A2",
-            "FB",
-            "FD"
-          ]
-        },
-        {
           "command": [
             "FE",
             "FE",
@@ -1281,6 +1260,28 @@
             "FB",
             "FD"
           ]
+        },
+        {
+          "comment": "restore main/downlink RX focus after PTT",
+          "command": [
+            "FE",
+            "FE",
+            "A2",
+            "E0",
+            "07",
+            "D2",
+            "00",
+            "FD"
+          ],
+          "reply": [
+            "FE",
+            "FE",
+            "E0",
+            "A2",
+            "FB",
+            "FD"
+          ],
+          "always_execute": true
         }
       ]
     },
