@@ -269,14 +269,16 @@ namespace skycatd
         // asserted PTT. The command sender state is updated by that operation.
         wsjtXInterpreter?.EnsurePttOff();
 
-        if (!commandSender.Transmitting ||
-            !commandSender.IsCommandAvailable(CatCommand.write_ptt_off))
+        if (!commandSender.PttMayBeOwnedByCommand)
           return;
 
         try
         {
+          // Call the sender directly rather than availability-gating on the last
+          // observed RX/TX state. A timed-out PTT-ON may have keyed the radio
+          // before Transmitting was updated.
           commandSender.SendCommand(CatCommand.write_ptt_off);
-          logger.LogInformation("Released CAT PTT before serial-port shutdown.");
+          logger.LogInformation("Released SkyCAT-owned PTT before serial-port shutdown.");
         }
         catch (Exception ex)
         {
