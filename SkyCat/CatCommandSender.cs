@@ -204,9 +204,15 @@ namespace SkyCat
         string logMessage = $"  Sending command: {command} {paramValue}";
         if (isSetup) Log?.LogInformation(logMessage); else Log?.LogDebug(logMessage);
 
-        // send CAT messages, collect returned value
-        foreach (var message in commandInfo.Messages) returnedValue ??= SendMessage(message, paramValue, isSetup);
-        
+        // Send every message in the command sequence. Keep the first parsed
+        // return value, but never let a non-null query result suppress trailing
+        // cleanup/focus messages (for example: read SUB, then restore MAIN).
+        foreach (var message in commandInfo.Messages)
+        {
+          string? messageValue = SendMessage(message, paramValue, isSetup);
+          returnedValue ??= messageValue;
+        }
+
         logMessage = $"  Command {command} returned '{returnedValue ?? "OK"}'";
         if (isSetup) Log?.LogInformation(logMessage); else Log?.LogDebug(logMessage);
       }
@@ -217,7 +223,10 @@ namespace SkyCat
         Log?.LogWarning($"Command {command} rejected by the radio. Trying alternative command.");
         returnedValue = null;
         foreach (var altMessage in commandInfo.AltMessages)
-          returnedValue ??= SendMessage(altMessage, paramValue, isSetup);
+        {
+          string? messageValue = SendMessage(altMessage, paramValue, isSetup);
+          returnedValue ??= messageValue;
+        }
         Log?.LogDebug($"Alternative command {command} returned '{returnedValue ?? "OK"}'");
       }
 
@@ -584,6 +593,16 @@ namespace SkyCat
         return;
       }
 
+      // RS-BA1/virtual-COM occasionally exposes idle/padding reads consisting
+      // entirely of zero bytes. They are not CI-V frames and have no command
+      // semantics. Treat them as transport noise rather than alarming the user.
+      if (IsZeroPadding(buffer.AsSpan(0, received)))
+      {
+        Log?.LogTrace(
+          $"Drained {received} byte(s) of zero padding from the CAT transport");
+        return;
+      }
+
       const int previewLength = 64;
       byte[] preview = buffer.Take(Math.Min(received, previewLength)).ToArray();
       string suffix = received > previewLength
@@ -593,6 +612,17 @@ namespace SkyCat
       Log?.LogWarning(
         $"Unexpected bytes received before command: " +
         $"{BitConverter.ToString(preview)}{suffix}");
+    }
+
+    internal static bool IsZeroPadding(ReadOnlySpan<byte> bytes)
+    {
+      if (bytes.Length == 0) return false;
+
+      for (int i = 0; i < bytes.Length; i++)
+        if (bytes[i] != 0)
+          return false;
+
+      return true;
     }
 
     private sealed class ScopeFrameTap
