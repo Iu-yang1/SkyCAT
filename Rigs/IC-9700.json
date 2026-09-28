@@ -189,7 +189,8 @@
             "A2",
             "FB",
             "FD"
-          ]
+          ],
+          "always_execute": true
         }
       ],
       "restriction": "when_setting_up"
@@ -313,7 +314,8 @@
             "A2",
             "FB",
             "FD"
-          ]
+          ],
+          "always_execute": true
         }
       ]
     },
@@ -506,7 +508,8 @@
             "A2",
             "FB",
             "FD"
-          ]
+          ],
+          "always_execute": true
         }
       ]
     },
@@ -734,7 +737,8 @@
             "A2",
             "FB",
             "FD"
-          ]
+          ],
+          "always_execute": true
         }
       ],
       "alt_messages": [
@@ -824,7 +828,8 @@
             "A2",
             "FB",
             "FD"
-          ]
+          ],
+          "always_execute": true
         }
       ]
     },
@@ -1183,7 +1188,8 @@
             "A2",
             "FB",
             "FD"
-          ]
+          ],
+          "always_execute": true
         }
       ]
     },
@@ -1228,7 +1234,8 @@
             "A2",
             "FB",
             "FD"
-          ]
+          ],
+          "always_execute": true
         }
       ]
     },
@@ -1345,7 +1352,8 @@
             "A2",
             "FB",
             "FD"
-          ]
+          ],
+          "always_execute": true
         }
       ],
       "restriction": "none"
@@ -1413,7 +1421,8 @@
             "A2",
             "FB",
             "FD"
-          ]
+          ],
+          "always_execute": true
         }
       ],
       "restriction": "none"
@@ -1481,7 +1490,8 @@
             "A2",
             "FB",
             "FD"
-          ]
+          ],
+          "always_execute": true
         }
       ],
       "restriction": "none"
