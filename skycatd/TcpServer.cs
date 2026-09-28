@@ -7,6 +7,8 @@ using Microsoft.Extensions.Logging;
 
 namespace skycatd
 {
+  public sealed record TcpClientSession(Func<string, string> Execute, Action? Disconnect = null);
+
   public class TcpServer
   {
     private readonly int Port;
@@ -15,9 +17,12 @@ namespace skycatd
     private readonly IPAddress ListenAddress;
     private readonly object CommandLock;
     private readonly Action? ClientDisconnected;
+    private readonly Func<TcpClientSession>? ClientSessionFactory;
     private readonly string ServerName;
     private TcpListener? Listener;
+    private volatile bool Stopping;
     private readonly ConcurrentDictionary<int, TcpClient> ActiveClients = new();
+    private readonly ConcurrentDictionary<int, Task> ActiveHandlers = new();
 
     public TcpServer(
       int port,
@@ -26,7 +31,8 @@ namespace skycatd
       IPAddress? listenAddress = null,
       object? commandLock = null,
       Action? clientDisconnected = null,
-      string serverName = "TCP")
+      string serverName = "TCP",
+      Func<TcpClientSession>? clientSessionFactory = null)
     {
       Port = port;
       CommandHandler = commandHandler;
@@ -34,6 +40,7 @@ namespace skycatd
       ListenAddress = listenAddress ?? IPAddress.Any;
       CommandLock = commandLock ?? new object();
       ClientDisconnected = clientDisconnected;
+      ClientSessionFactory = clientSessionFactory;
       ServerName = serverName;
     }
 
@@ -41,6 +48,7 @@ namespace skycatd
     {
       if (IsListening()) return;
 
+      Stopping = false;
       TcpListener? listener = null;
 
       try
@@ -66,7 +74,19 @@ namespace skycatd
                 break;
               }
 
-              _ = Task.Run(() => HandleClient(client));
+              int id = Interlocked.Increment(ref NextId) - 1;
+              var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+              ActiveHandlers[id] = completion.Task;
+
+              _ = Task.Run(() =>
+              {
+                try { HandleClient(client, id); }
+                finally
+                {
+                  completion.TrySetResult();
+                  ActiveHandlers.TryRemove(id, out _);
+                }
+              });
             }
             catch (ObjectDisposedException)
             {
@@ -97,9 +117,12 @@ namespace skycatd
 
     int NextId = 1;
 
-    private void HandleClient(TcpClient client)
+    private void HandleClient(TcpClient client, int id)
     {
-      int id = Interlocked.Increment(ref NextId) - 1;
+      TcpClientSession? session = ClientSessionFactory?.Invoke();
+      Func<string, string> commandHandler = session?.Execute ?? CommandHandler;
+      Action? clientDisconnected = session?.Disconnect ?? ClientDisconnected;
+
       ActiveClients[id] = client;
       var endPoint = client.Client.RemoteEndPoint;
       Logger.LogInformation($"{ServerName} client #{id} connected: {endPoint} ({ActiveClients.Count} connected clients)");
@@ -111,12 +134,19 @@ namespace skycatd
         using var writer = new StreamWriter(stream, Encoding.ASCII) { AutoFlush = true };
 
         string? line;
-        while ((line = reader.ReadLine()) != null)
+        while (!Stopping && (line = reader.ReadLine()) != null)
         {
           Logger.LogDebug($"Received from {ServerName} client #{id}: '{line}'");
 
           string response;
-          lock (CommandLock) response = CommandHandler(line);
+          lock (CommandLock)
+          {
+            // Stop() closes sockets and then performs the final radio fail-safe.
+            // Re-check while holding the same lock so a line read just before
+            // shutdown can never key the transmitter after that final PTT OFF.
+            if (Stopping) break;
+            response = commandHandler(line);
+          }
 
           Logger.LogDebug($"  Replying to {ServerName} client #{id}: {AddDescription(response)}");
           writer.Write(response + "\n");
@@ -135,10 +165,10 @@ namespace skycatd
         client.Close();
         ActiveClients.TryRemove(id, out _);
 
-        if (ClientDisconnected != null)
+        if (clientDisconnected != null)
           try
           {
-            lock (CommandLock) ClientDisconnected();
+            lock (CommandLock) clientDisconnected();
           }
           catch (Exception ex)
           {
@@ -167,19 +197,32 @@ namespace skycatd
 
     public void Stop()
     {
+      // Gate command execution before closing sockets. HandleClient re-checks
+      // this flag while holding CommandLock, so no already-read write command
+      // can run after the server's final shutdown PTT release.
+      Stopping = true;
+
       TcpListener? listener = Listener;
       Listener = null;
 
       try { listener?.Stop(); } catch { }
 
-      // Close tracked clients even if the listener has already failed.
-      foreach (var entry in ActiveClients.ToArray())
-      {
-        if (!ActiveClients.TryRemove(entry.Key, out TcpClient? client))
-          continue;
-
+      // Close tracked clients even if the listener has already failed. Their
+      // per-client disconnect callbacks run while the serial port is still open.
+      foreach (TcpClient client in ActiveClients.Values.ToArray())
         try { client.Close(); } catch { }
-      }
+
+      Task[] handlers = ActiveHandlers.Values.ToArray();
+      if (handlers.Length > 0)
+        try
+        {
+          if (!Task.WaitAll(handlers, TimeSpan.FromSeconds(5)))
+            Logger.LogWarning($"{ServerName} client handlers did not fully drain before shutdown.");
+        }
+        catch (AggregateException ex)
+        {
+          Logger.LogDebug($"{ServerName} client drain completed with errors: {ex.Flatten().Message}");
+        }
 
       Logger.LogInformation($"{ServerName} server stopped.");
     }
