@@ -10,7 +10,7 @@ nav_order: 4
 
 _Updated: 2026-08-12_.
 
-[SkyCAT](skycat.md) stores the CAT commands of each supported radio in a separate file of type **.json**. The file name is the model name of the radio, for example, _"IC-9700.json"_ contains the commands of ICOM IC-9700. Support of new radio models may be added to SkyCAT by creating new command set files.
+[SkyCAT](index.md) stores the CAT commands of each supported radio in a separate file of type **.json**. The file name is the model name of the radio, for example, _"IC-9700.json"_ contains the commands of ICOM IC-9700. Support of new radio models may be added to SkyCAT by creating new command set files.
 
 ## Operating Modes
 
