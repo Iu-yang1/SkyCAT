@@ -3,6 +3,9 @@ title: SkyCAT Commandset File Format
 nav_order: 4
 ---
 
+**Language:** English | [简体中文](zh-cn/commandset-format.md)
+
+
 # SkyCAT Commandset File Format
 
 _Updated: 2026-08-12_.
