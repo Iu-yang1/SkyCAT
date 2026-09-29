@@ -1,3 +1,5 @@
+**Language:** English | [简体中文](zh-cn/IC-R7000-SkyCAT-Notes.md)
+
 # **IC-R7000 SkyCAT Driver**
 
 _Development Notes & Community Contribution Guide_
