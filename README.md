@@ -10,3 +10,5 @@ main CAT server.
 
 See the expanded [skycatd command-line guide](docs/skycatd.md) for all command-line options,
 port behavior, supported radio IDs, SkyRoof examples, and WSJT-X configuration.
+
+Documentation: [English](docs/index.md) | [简体中文](docs/zh-cn/index.md)
