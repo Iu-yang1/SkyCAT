@@ -3,6 +3,9 @@ title: SkyCAT Library
 nav_order: 2
 ---
 
+**Language:** English | [简体中文](zh-cn/library.md)
+
+
 # SkyCAT Library
 
 SkyCAT is available as a **.NET** assembly. It does not have any platform-specific code and may be used on all platforms where **dotnet** is supported, including Windows, Linux and MacOS. The main class in the assembly is `CatCommandSender`. Here is an example showing how to use this class:

@@ -3,6 +3,9 @@ title: skycatd.exe
 nav_order: 3
 ---
 
+**Language:** English | [简体中文](zh-cn/skycatd.md)
+
+
 # skycatd.exe
 
 **skycatd.exe** is a command-line application based on the SkyCAT library. It connects to a
