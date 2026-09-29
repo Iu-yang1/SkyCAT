@@ -2,5 +2,7 @@ remote_theme: just-the-docs/just-the-docs
 title: SkyCAT
 description: Documentation for SkyCAT, a radio CAT control engine
 aux_links:
+  "English": "https://iu-yang1.github.io/SkyCAT/"
+  "简体中文": "https://iu-yang1.github.io/SkyCAT/zh-cn/"
   "SkyCAT fork on GitHub": "https://github.com/Iu-yang1/SkyCAT"
   "Upstream SkyCAT": "https://github.com/VE3NEA/SkyCAT"
