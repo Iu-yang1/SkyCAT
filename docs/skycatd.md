@@ -5,70 +5,437 @@ nav_order: 3
 
 # skycatd.exe
 
-**skycatd.exe** is a command-line application, based on the SkyCAT library, that listens on a TCP port for commands and controls the radio via a COM port.
+**skycatd.exe** is a command-line application based on the SkyCAT library. It connects to a
+radio through a serial port and exposes CAT control over TCP.
+
+This fork also provides two additional loopback-only services:
+
+- a restricted Hamlib NET rigctl compatibility endpoint for WSJT-X;
+- a binary IC-9700 scope-frame stream for SkyRoof.
 
 ## Installation
 
-There is no installer, just [download](download.md) and unzip all files to a folder.
+There is no installer. [Download](download.md) the release and unzip all files to a folder.
 
-Check [this folder](https://github.com/VE3NEA/SkyCAT/tree/master/Rigs) for the latest versions of the command set file for your radio.
+The radio command-set files are stored in the **Rigs** subfolder. The model passed to
+`--model` must match one of those command sets, or its numeric model ID.
 
 Make sure that [.NET 9.0 Desktop Runtime](https://learn.microsoft.com/en-us/dotnet/core/install/)
-is installed on your system:
+is installed when using the framework-dependent build.
 
 Windows:
 
-``` bash
+```bash
 winget install Microsoft.DotNet.DesktopRuntime.9
 ```
 
-MacOS:
+macOS:
 
-``` bash
+```bash
 brew install dotnet
 ```
-  
+
 Linux (Ubuntu):
-  
-``` bash
+
+```bash
 sudo apt-get update
 sudo apt-get install -y dotnet-sdk-9.0
 ```
-  
-  More distros are available [here](https://learn.microsoft.com/dotnet/core/install/linux).
+
+More distributions are available
+[here](https://learn.microsoft.com/dotnet/core/install/linux).
+
+## Quick Start
+
+For an IC-9700 connected as `COM9`:
+
+```bash
+skycatd.exe -m IC-9700 -r COM9
+```
+
+The IC-9700 command set already defines 115200 Baud as its default, so the command above is
+equivalent to:
+
+```bash
+skycatd.exe -m IC-9700 -r COM9 -s 115200
+```
+
+With the default options, skycatd opens the following listeners:
+
+| Service | Default address | Default port |
+|---------|-----------------|-------------:|
+| Main SkyCAT CAT server | `127.0.0.1` | 4532 |
+| WSJT-X compatibility proxy | `127.0.0.1` | 4534 |
+| IC-9700 scope stream | `127.0.0.1` | 4535 |
+
+The main CAT server is loopback-only by default. It listens on all interfaces only when
+`--allow-remote` is explicitly specified.
 
 ## Command Line Parameters
 
-``` bash
-skycatd -m IC-9700 -r COM9 -s 115200 -t 4532 -vvv -f
+A typical command line is:
+
+```bash
+skycatd.exe -m IC-9700 -r COM9 -s 115200 -t 4532 -vvv -f
 ```
 
-- **-m** - required. The radio model, either model name or numeric code:
-  - the model name must be one of the [commandset file names](https://github.com/VE3NEA/SkyCAT/tree/master/Rigs), without extension;
-  - the numeric code must be one of the codes printed with the **-l** command, see below;
+### `-m, --model <model>`
 
-- **-r** - required. The serial port name, e.g. "COM1" on Windows, or " /dev/ttyS0" on Linux;
+Required for normal server operation.
 
-- **-s** - The Baud rate of the serial port. Optional, the program knows the maximum speed of each supported radio;
+Selects the radio command set. The value may be either:
 
-- **-t** - TCP listening port, optional, defaults to 4532;
-- **--scope-port** - loopback-only binary IC-9700 scope stream port, defaults to 4535. Each frame is sent as a 4-byte little-endian length followed by the raw CI-V frame.
+- the command-set file name without the `.json` extension, for example `IC-9700`;
+- the numeric model ID printed by `skycatd.exe -l`.
 
-- **-vvv** - optional, enables detailed logging;
+Examples:
 
-- **-f**  - optional, enables writing the log to a file.
+```bash
+skycatd.exe -m IC-9700 -r COM9
+skycatd.exe -m 3081 -r COM9
+```
 
-<br>
+Both commands select the IC-9700 command set.
 
-In addition, there are options that print information and exit:
+### `-r, --rig-file <serial-port>`
 
-- **--help** - display the Help screen;
+Required for normal server operation.
 
-- **--version** - display the version information;
+Specifies the serial port connected to the radio. The long option name is retained for
+compatibility; the current implementation uses this value directly as the serial-port name.
 
-- **-l** - list supported radios and their numeric codes;
+Windows example:
 
-- **-a** - list capabilities of all supported radios.
+```bash
+-r COM9
+```
+
+Linux example:
+
+```bash
+-r /dev/ttyUSB0
+```
+
+### `-s, --serial-speed <baud>`
+
+Optional.
+
+Overrides the default Baud rate stored in the selected radio command set.
+
+Example:
+
+```bash
+skycatd.exe -m IC-9700 -r COM9 -s 115200
+```
+
+If this option is omitted, skycatd uses the command set's `default_baud_rate`.
+
+### `-t, --port <port>`
+
+Optional. Default: **4532**.
+
+Sets the TCP port of the main SkyCAT CAT server.
+
+Example:
+
+```bash
+skycatd.exe -m IC-9700 -r COM9 -t 4600
+```
+
+By default the server listens on:
+
+```text
+127.0.0.1:<port>
+```
+
+Use `--allow-remote` to bind the main CAT server to all network interfaces.
+
+### `--allow-remote`
+
+Optional. Default: **off**.
+
+Allows the main CAT server to listen on all interfaces.
+
+Without this option:
+
+```text
+127.0.0.1:4532
+```
+
+With this option:
+
+```bash
+skycatd.exe -m IC-9700 -r COM9 --allow-remote
+```
+
+the main CAT server listens on:
+
+```text
+0.0.0.0:4532
+```
+
+This option affects only the main CAT listener. The WSJT-X proxy and scope stream remain
+loopback-only.
+
+> The main CAT TCP protocol does not provide TLS or user authentication. Do not expose it
+> directly to the public Internet. For remote operation, use a trusted LAN, firewall rules,
+> VPN, or another protected tunnel.
+
+### `--wsjtx-port <port>`
+
+Optional. Default: **4534**.
+
+Sets the port of the loopback-only WSJT-X Hamlib NET rigctl compatibility proxy.
+
+Example:
+
+```bash
+skycatd.exe -m IC-9700 -r COM9 --wsjtx-port 4540
+```
+
+The proxy always listens on `127.0.0.1`, regardless of `--allow-remote`.
+
+### `--no-wsjtx-proxy`
+
+Optional. Default: **off**.
+
+Disables the WSJT-X compatibility proxy completely.
+
+Example:
+
+```bash
+skycatd.exe -m IC-9700 -r COM9 --no-wsjtx-proxy
+```
+
+The main CAT server and scope stream continue to operate normally.
+
+### `--scope-port <port>`
+
+Optional. Default: **4535**.
+
+Sets the loopback-only binary scope-stream port used by SkyRoof for native IC-9700 spectrum
+frames.
+
+Example:
+
+```bash
+skycatd.exe -m IC-9700 -r COM9 --scope-port 4605
+```
+
+The scope server always listens on `127.0.0.1`.
+
+Each scope message on this port consists of:
+
+1. a 4-byte little-endian unsigned frame length;
+2. the raw CI-V frame of that length.
+
+This port is binary and must not be used as a rigctl or normal CAT text endpoint.
+
+### `-v, --verbose`
+
+Optional.
+
+Enables verbose logging. The historical command-line form uses repeated `v` characters:
+
+```bash
+skycatd.exe -m IC-9700 -r COM9 -vvv
+```
+
+In the current implementation, specifying the verbose option enables the **Verbose** Serilog
+level; the number of `v` characters does not select additional logging levels.
+
+Without the option, the minimum log level is **Warning**.
+
+### `-f, --file-log`
+
+Optional. Default: **off**.
+
+Writes the log to a file in addition to the console.
+
+Example:
+
+```bash
+skycatd.exe -m IC-9700 -r COM9 -vvv -f
+```
+
+On Windows the file is created under the current working directory using a name similar to:
+
+```text
+Logs\skycatd_2026-09-29_080000.log
+```
+
+The full log path is printed when the server starts.
+
+### `-l, --list`
+
+Prints the supported radio model IDs and exits.
+
+```bash
+skycatd.exe -l
+```
+
+Example output:
+
+```text
+Rig #    Model
+3081     IC-9700
+...
+```
+
+Neither `--model` nor `--rig-file` is required with this option.
+
+### `-a, --all`
+
+Prints the capabilities of every loaded radio command set and exits.
+
+```bash
+skycatd.exe -a
+```
+
+The output is JSON-formatted capability data.
+
+Neither `--model` nor `--rig-file` is required with this option.
+
+### `--help`
+
+Displays the command-line help generated by CommandLineParser and exits.
+
+```bash
+skycatd.exe --help
+```
+
+### `--version`
+
+Displays version information and exits.
+
+```bash
+skycatd.exe --version
+```
+
+## Port Rules
+
+All TCP ports must be in the range **1-65535**.
+
+When the WSJT-X proxy is enabled, the following ports must all be different:
+
+- main CAT port (`--port`);
+- WSJT-X proxy port (`--wsjtx-port`);
+- scope stream port (`--scope-port`).
+
+For example, this is invalid:
+
+```bash
+skycatd.exe -m IC-9700 -r COM9 -t 4534 --wsjtx-port 4534
+```
+
+If the WSJT-X proxy is disabled, its configured port no longer conflicts with the main CAT
+server, but the main CAT port and scope port must still be different.
+
+## Supported Radios
+
+The current fork includes the following command sets:
+
+| Model | Model ID | Default Baud rate |
+|-------|---------:|------------------:|
+| FT-817 | 1020 | 38400 |
+| FT-818 | 1041 | 38400 |
+| FT-847 | 1001 | 57600 |
+| FT-897 | 1023 | 38400 |
+| FT-991A | 1035 | 38400 |
+| IC-705 | 3085 | 115200 |
+| IC-705-wireless | 30850 | 19200 |
+| IC-706MKIIG | 3011 | 19200 |
+| IC-905 | 3090 | 115200 |
+| IC-910 | 3044 | 19200 |
+| IC-9100 | 3068 | 19200 |
+| IC-9700 | 3081 | 115200 |
+| IC-R7000 | 3040 | 1200 |
+| TS-2000 | 2014 | 57600 |
+
+Use `skycatd.exe -l` as the authoritative list for the particular build you are running.
+
+## Common Configurations
+
+### SkyRoof + IC-9700
+
+For the usual local SkyRoof configuration:
+
+```bash
+skycatd.exe -m IC-9700 -r COM9
+```
+
+This provides:
+
+```text
+SkyRoof CAT:     127.0.0.1:4532
+WSJT-X proxy:    127.0.0.1:4534
+Scope stream:    127.0.0.1:4535
+```
+
+If the radio uses a different COM port:
+
+```bash
+skycatd.exe -m IC-9700 -r COM12
+```
+
+### SkyRoof + WSJT-X
+
+Run:
+
+```bash
+skycatd.exe -m IC-9700 -r COM9
+```
+
+SkyRoof connects to:
+
+```text
+127.0.0.1:4532
+```
+
+WSJT-X connects to:
+
+```text
+127.0.0.1:4534
+```
+
+Recommended WSJT-X settings are described in
+[WSJT-X Compatibility Proxy](#wsjt-x-compatibility-proxy).
+
+### Main CAT on another LAN computer
+
+To allow another computer on the local network to connect to the main SkyCAT endpoint:
+
+```bash
+skycatd.exe -m IC-9700 -r COM9 --allow-remote
+```
+
+If Windows Firewall prompts for access, allow only the network profiles that are actually
+required.
+
+The WSJT-X and scope ports remain local to the skycatd computer.
+
+### Custom TCP ports
+
+```bash
+skycatd.exe -m IC-9700 -r COM9 \
+  --port 4600 \
+  --wsjtx-port 4601 \
+  --scope-port 4602
+```
+
+### Disable WSJT-X integration
+
+```bash
+skycatd.exe -m IC-9700 -r COM9 --no-wsjtx-proxy
+```
+
+### Diagnostic logging
+
+```bash
+skycatd.exe -m IC-9700 -r COM9 -vvv -f
+```
+
+This is the recommended form when collecting logs for CAT, CI-V, PTT, or scope debugging.
 
 ## Running skycatd
 
@@ -78,74 +445,88 @@ Windows:
 skycatd.exe <parameters>
 ```
 
-Linux and MacOS:
+Linux and macOS:
 
 ```bash
 dotnet skycatd.dll <parameters>
 ```
 
+Stop the server with **Ctrl-C**. skycatd stops accepting clients, releases PTT that it owns,
+stops the scope stream, and closes the serial port before exiting.
+
+If the serial port becomes unavailable while skycatd is running, the server periodically attempts
+to reopen it. The TCP listeners are restarted after the serial connection becomes available again.
+
 ## Skycatd Commands
 
-skycatd understands the following TCP commands, followed by the NewLine character:
+The main SkyCAT TCP server understands the following line-oriented commands:
 
-| Action             | Command        |
-|--------------------|----------------|
-| setup(Duplex)      | U Duplex       |
-| setup(Split)       | U Split        |
-| setup(Simplex)     | U Simplex      |
-| read_rx_frequency  | f              |
-| read_tx_frequency  | i              |
-| write_rx_frequency | F {frequency}  |
-| write_tx_frequency | I {frequency}  |
-| write_rx_mode      | M {mode} 0     |
-| write_tx_mode      | X {mode} 0     |
-| read_ptt           | t              |
-| set_ptt_on         | T 1            |
-| set_ptt_off        | T 0            |
-| write_ctcss_tone   | C {tone}       |
-| enable_ctcss       | U TONE 1       |
-| disable_ctcss      | U TONE 0       |
+| Action | Command |
+|--------|---------|
+| setup(Duplex) | `U Duplex` |
+| setup(Split) | `U Split` |
+| setup(Simplex) | `U Simplex` |
+| read_rx_frequency | `f` |
+| read_tx_frequency | `i` |
+| write_rx_frequency | `F {frequency}` |
+| write_tx_frequency | `I {frequency}` |
+| read_rx_mode | `m` |
+| read_tx_mode | `x` |
+| write_rx_mode | `M {mode} 0` |
+| write_tx_mode | `X {mode} 0` |
+| read_ptt | `t` |
+| set_ptt_on | `T 1` |
+| set_ptt_off | `T 0` |
+| write_ctcss_tone | `C {tone}` |
+| enable_ctcss | `U TONE 1` |
+| disable_ctcss | `U TONE 0` |
+| enable_scope | `U SCOPE 1` |
+| disable_scope | `U SCOPE 0` |
+| enable_scope_data | `U SCOPE_DATA 1` |
+| disable_scope_data | `U SCOPE_DATA 0` |
+| IC-9700 scope sweep FAST | `U SCOPE_FAST 1` |
 
-where **frequency** is the frequency in Hertz, **mode** is a mode name, e.g., CW, and **tone** is
-the CTCSS sub-audible (PL) tone in tenths of Hz, e.g. `C 670` = 67.0 Hz.
+**frequency** is in Hertz.
 
-For compatibility with rigctld.exe, the '**U SATMODE 1**', '**S 1 VFOB**' and '**S 0 VFOB**' commands are recognized as aliases of the Duplex, Split and Simplex setup commands respectively.
+**tone** is the CTCSS transmit tone in tenths of Hz. For example:
 
+```text
+C 670
+```
+
+selects 67.0 Hz.
+
+For compatibility with rigctld clients, the following setup aliases are also recognized:
+
+```text
+U SATMODE 1
+S 1 VFOB
+S 0 VFOB
+```
+
+They map to Duplex, Split and Simplex operation respectively.
 
 ## WSJT-X Compatibility Proxy
 
-This fork adds a restricted Hamlib NET rigctl compatibility endpoint for WSJT-X.
+This fork includes a restricted Hamlib NET rigctl compatibility endpoint intended specifically
+for WSJT-X.
 
-By default, when skycatd is running normally, three TCP listeners are started:
+The proxy implements the Hamlib initialization queries `\chk_vfo` and `\dump_state`,
+frequency/mode/PTT reads, and CAT PTT.
 
-- **0.0.0.0:4532** — normal SkyCAT/SkyRoof control endpoint.
-- **127.0.0.1:4534** — loopback-only WSJT-X compatibility endpoint.
-- **127.0.0.1:4535** — loopback-only IC-9700 native scope-frame stream used by SkyRoof. This endpoint is binary and deliberately separate from rigctl traffic.
+Radio-state writes such as frequency, mode, VFO, split, SAT mode, and CTCSS are acknowledged as
+successful no-ops rather than being forwarded to the radio. This prevents WSJT-X/Hamlib from
+entering a Radio Fault state while keeping SkyRoof as the single owner of tuning and Doppler
+control.
 
-The WSJT-X endpoint implements the Hamlib initialization queries `\\chk_vfo` and
-`\\dump_state`, exposes frequency/mode/PTT reads, and permits CAT PTT. Radio-state
-writes such as frequency, mode, VFO, split, SAT mode and CTCSS are acknowledged as
-successful no-ops but are never forwarded to the radio. This keeps WSJT-X/Hamlib
-from entering a Radio Fault during setup or band changes while SkyRoof remains the
-only tuning/Doppler controller.
+When a WSJT-X client that asserted CAT PTT disconnects, SkyCAT attempts to release that
+client-owned PTT as a safety measure.
 
-The proxy port can be changed with:
-
-``` bash
-skycatd.exe -m IC-9700 -r COM9 -s 115200 --wsjtx-port 4534
-```
-
-Disable the proxy entirely with:
-
-``` bash
-skycatd.exe -m IC-9700 -r COM9 -s 115200 --no-wsjtx-proxy
-```
-
-The WSJT-X listener is intentionally bound to loopback only.
+The WSJT-X proxy is always loopback-only.
 
 ### WSJT-X settings
 
-In **File → Settings → Radio**:
+In **File -> Settings -> Radio**:
 
 - **Rig:** Hamlib NET rigctl
 - **Network Server:** `127.0.0.1:4534`
@@ -153,8 +534,32 @@ In **File → Settings → Radio**:
 - **Mode:** None
 - **Split Operation:** None
 
-SkyRoof should continue connecting directly to the normal SkyCAT port, usually
-`127.0.0.1:4532`.
+SkyRoof should continue connecting directly to the normal SkyCAT CAT port, usually:
 
-When a WSJT-X client that asserted CAT PTT disconnects, the proxy sends PTT OFF as a
-safety measure.
+```text
+127.0.0.1:4532
+```
+
+## IC-9700 Scope Stream
+
+The scope stream is deliberately separated from the normal line-oriented CAT protocol.
+
+Default endpoint:
+
+```text
+127.0.0.1:4535
+```
+
+SkyCAT extracts complete IC-9700 CI-V `27 00` waveform frames from the shared serial transport
+and publishes them to connected scope clients. Slow clients use a bounded queue; older spectrum
+frames may be dropped so scope traffic cannot block CAT commands.
+
+The scope stream is intended for live display rather than lossless capture.
+
+## Notes
+
+- The main CAT server defaults to loopback-only for safety.
+- `--allow-remote` does not expose the WSJT-X or scope listeners.
+- The selected `--model` determines the available CAT commands and default serial speed.
+- Command availability may differ between Duplex, Split, and Simplex operating modes.
+- A connected program should not assume that every radio implements every command.
