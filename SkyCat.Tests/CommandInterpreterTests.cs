@@ -98,6 +98,7 @@ namespace SkyCat.Tests
     [InlineData("U SCOPE_CENTER_TYPE ABS")]
     [InlineData("U SCOPE_VBW SUB WIDE")]
     [InlineData("U SCOPE_MARKER CARRIER")]
+    [InlineData("U SCOPE_READ")]
     public void ValidScopeCommandsFailCleanlyWithoutOpenSerial(
       string command)
     {
