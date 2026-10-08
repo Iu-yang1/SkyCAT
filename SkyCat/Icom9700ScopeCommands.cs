@@ -21,6 +21,25 @@ namespace SkyCat
     Slow = 0x02
   }
 
+  public enum Icom9700ScopeCenterType : byte
+  {
+    FilterCenter = 0x00,
+    CarrierPoint = 0x01,
+    CarrierPointAbsolute = 0x02
+  }
+
+  public enum Icom9700ScopeVbw : byte
+  {
+    Narrow = 0x00,
+    Wide = 0x01
+  }
+
+  public enum Icom9700ScopeMarkerPosition : byte
+  {
+    FilterCenter = 0x00,
+    CarrierPoint = 0x01
+  }
+
   /// <summary>
   /// Pure builders for IC-9700 CI-V spectrum-scope commands.
   /// Keeping wire encoding out of the daemon command parser makes the byte
@@ -145,6 +164,34 @@ namespace SkyCat
         0x1A,
         (byte)receiver,
         (byte)speed);
+
+    public static byte[] BuildScopeDuringTx(
+      bool enabled) =>
+      Build(
+        0x1B,
+        enabled
+          ? (byte)0x01
+          : (byte)0x00);
+
+    public static byte[] BuildCenterType(
+      Icom9700ScopeCenterType type) =>
+      Build(
+        0x1C,
+        (byte)type);
+
+    public static byte[] BuildVbw(
+      Icom9700ScopeReceiver receiver,
+      Icom9700ScopeVbw vbw) =>
+      Build(
+        0x1D,
+        (byte)receiver,
+        (byte)vbw);
+
+    public static byte[] BuildMarkerPosition(
+      Icom9700ScopeMarkerPosition position) =>
+      Build(
+        0x20,
+        (byte)position);
 
     public static byte[] BuildFixedEdge(
       int frequencyRange,
