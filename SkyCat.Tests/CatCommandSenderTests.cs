@@ -105,6 +105,19 @@ namespace SkyCat.Tests
     }
 
     [Fact]
+    public void ScopeSelectBuilderMatchesCivWireFormat()
+    {
+      Assert.Equal(
+        new byte[]
+        {
+          0xFE, 0xFE, 0xA2, 0xE0,
+          0x27, 0x12, 0x01, 0xFD
+        },
+        Icom9700ScopeCommands.BuildSelectedScope(
+          Icom9700ScopeReceiver.Sub));
+    }
+
+    [Fact]
     public void ScopeModeBuilderMatchesCivWireFormat()
     {
       Assert.Equal(

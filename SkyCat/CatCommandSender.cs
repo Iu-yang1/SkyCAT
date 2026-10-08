@@ -155,6 +155,13 @@ namespace SkyCat
 
 
 
+    public void SetIcomSelectedScope(
+      Icom9700ScopeReceiver receiver) =>
+      SendIcom9700ScopeCommand(
+        Icom9700ScopeCommands.BuildSelectedScope(
+          receiver),
+        $"selected scope {receiver}");
+
     public void SetIcomScopeMode(
       Icom9700ScopeReceiver receiver,
       Icom9700ScopeMode mode) =>

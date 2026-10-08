@@ -40,6 +40,12 @@ namespace SkyCat
       500_000
     ];
 
+    public static byte[] BuildSelectedScope(
+      Icom9700ScopeReceiver receiver) =>
+      Build(
+        0x12,
+        (byte)receiver);
+
     public static byte[] BuildMode(
       Icom9700ScopeReceiver receiver,
       Icom9700ScopeMode mode) =>

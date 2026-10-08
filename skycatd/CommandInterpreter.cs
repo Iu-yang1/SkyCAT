@@ -45,6 +45,12 @@ namespace skycatd
         "U" when args.Length == 3 && args[1] == "SCOPE_DATA" && args[2] == "1" => SendCommandIfAvailable(CatCommand.enable_scope_data),
         "U" when args.Length == 3 && args[1] == "SCOPE_DATA" && args[2] == "0" => SendCommandIfAvailable(CatCommand.disable_scope_data),
         "U" when args.Length == 3 && args[1] == "SCOPE_FAST" && args[2] == "1" => SetScopeFast(),
+        "U" when args.Length == 3 &&
+                 args[1] == "SCOPE_SELECT" &&
+                 TryParseScopeReceiver(args[2], out var selectedScope) =>
+          ExecuteScopeAction(
+            () => CommandSender.SetIcomSelectedScope(
+              selectedScope)),
         "U" when args.Length == 4 &&
                  args[1] == "SCOPE_MODE" &&
                  TryParseScopeReceiver(args[2], out var scopeModeReceiver) &&

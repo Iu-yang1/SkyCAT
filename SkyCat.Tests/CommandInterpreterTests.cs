@@ -67,6 +67,7 @@ namespace SkyCat.Tests
     }
 
     [Theory]
+    [InlineData("U SCOPE_SELECT SIDE")]
     [InlineData("U SCOPE_MODE MAIN BAD")]
     [InlineData("U SCOPE_SPAN SIDE 50000")]
     [InlineData("U SCOPE_EDGE MAIN nope")]
@@ -82,6 +83,7 @@ namespace SkyCat.Tests
     }
 
     [Theory]
+    [InlineData("U SCOPE_SELECT SUB")]
     [InlineData("U SCOPE_MODE MAIN CENTER")]
     [InlineData("U SCOPE_SPAN MAIN 50000")]
     [InlineData("U SCOPE_EDGE MAIN 2")]
