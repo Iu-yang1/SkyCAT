@@ -122,6 +122,17 @@ namespace SkyCat
       };
   }
 
+  public sealed class Icom9700FixedEdgeSnapshot
+  {
+    public int FrequencyRange { get; init; }
+    public int EdgeNumber { get; init; }
+    public long LowerHz { get; init; }
+    public long UpperHz { get; init; }
+
+    public string ToProtocolString() =>
+      $"RANGE={FrequencyRange};EDGE={EdgeNumber};LOWER={LowerHz};UPPER={UpperHz}";
+  }
+
   /// <summary>
   /// Pure builders for IC-9700 CI-V spectrum-scope commands.
   /// Keeping wire encoding out of the daemon command parser makes the byte
@@ -275,23 +286,29 @@ namespace SkyCat
         0x20,
         (byte)position);
 
+    public static byte[] BuildFixedEdgeQuery(
+      int frequencyRange,
+      int edgeNumber)
+    {
+      ValidateFixedEdgeSelector(
+        frequencyRange,
+        edgeNumber);
+
+      return Build(
+        0x1E,
+        (byte)frequencyRange,
+        (byte)edgeNumber);
+    }
+
     public static byte[] BuildFixedEdge(
       int frequencyRange,
       int edgeNumber,
       long lowerHz,
       long upperHz)
     {
-      if (frequencyRange is < 1 or > 3)
-        throw new ArgumentOutOfRangeException(
-          nameof(frequencyRange),
-          frequencyRange,
-          "IC-9700 fixed-edge frequency range must be 1 (144 MHz), 2 (430 MHz), or 3 (1.2 GHz).");
-
-      if (edgeNumber is < 1 or > 4)
-        throw new ArgumentOutOfRangeException(
-          nameof(edgeNumber),
-          edgeNumber,
-          "IC-9700 scope edge number must be 1 through 4.");
+      ValidateFixedEdgeSelector(
+        frequencyRange,
+        edgeNumber);
 
       (long minimum, long maximum) =
         frequencyRange switch
@@ -401,6 +418,23 @@ namespace SkyCat
       return bytes[2] == 1
         ? -value
         : value;
+    }
+
+    private static void ValidateFixedEdgeSelector(
+      int frequencyRange,
+      int edgeNumber)
+    {
+      if (frequencyRange is < 1 or > 3)
+        throw new ArgumentOutOfRangeException(
+          nameof(frequencyRange),
+          frequencyRange,
+          "IC-9700 fixed-edge frequency range must be 1 (144 MHz), 2 (430 MHz), or 3 (1.2 GHz).");
+
+      if (edgeNumber is < 1 or > 4)
+        throw new ArgumentOutOfRangeException(
+          nameof(edgeNumber),
+          edgeNumber,
+          "IC-9700 scope edge number must be 1 through 4.");
     }
 
     private static byte[] Build(
