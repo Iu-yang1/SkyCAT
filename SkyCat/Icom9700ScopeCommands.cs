@@ -34,13 +34,6 @@ namespace SkyCat
     Wide = 0x01
   }
 
-  public enum Icom9700ScopeRbw : byte
-  {
-    Wide = 0x00,
-    Mid = 0x01,
-    Narrow = 0x02
-  }
-
   public enum Icom9700ScopeMarkerPosition : byte
   {
     FilterCenter = 0x00,
@@ -57,7 +50,6 @@ namespace SkyCat
     public double MainReferenceDb { get; init; }
     public Icom9700ScopeSweepSpeed MainSpeed { get; init; }
     public Icom9700ScopeVbw MainVbw { get; init; }
-    public Icom9700ScopeRbw MainRbw { get; init; }
 
     public Icom9700ScopeMode SubMode { get; init; }
     public long SubSpanHz { get; init; }
@@ -65,7 +57,6 @@ namespace SkyCat
     public double SubReferenceDb { get; init; }
     public Icom9700ScopeSweepSpeed SubSpeed { get; init; }
     public Icom9700ScopeVbw SubVbw { get; init; }
-    public Icom9700ScopeRbw SubRbw { get; init; }
 
     public bool ScopeDuringTx { get; init; }
     public Icom9700ScopeCenterType CenterType { get; init; }
@@ -81,14 +72,12 @@ namespace SkyCat
         $"MAIN.REF={MainReferenceDb.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)}",
         $"MAIN.SPEED={MainSpeed.ToString().ToUpperInvariant()}",
         $"MAIN.VBW={MainVbw.ToString().ToUpperInvariant()}",
-        $"MAIN.RBW={MainRbw.ToString().ToUpperInvariant()}",
         $"SUB.MODE={FormatMode(SubMode)}",
         $"SUB.SPAN={SubSpanHz}",
         $"SUB.EDGE={SubEdge}",
         $"SUB.REF={SubReferenceDb.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)}",
         $"SUB.SPEED={SubSpeed.ToString().ToUpperInvariant()}",
         $"SUB.VBW={SubVbw.ToString().ToUpperInvariant()}",
-        $"SUB.RBW={SubRbw.ToString().ToUpperInvariant()}",
         $"TX={(ScopeDuringTx ? 1 : 0)}",
         $"CENTER={FormatCenterType(CenterType)}",
         $"MARKER={(MarkerPosition == Icom9700ScopeMarkerPosition.CarrierPoint ? "CARRIER" : "FILTER")}");
@@ -290,14 +279,6 @@ namespace SkyCat
         0x1D,
         (byte)receiver,
         (byte)vbw);
-
-    public static byte[] BuildRbw(
-      Icom9700ScopeReceiver receiver,
-      Icom9700ScopeRbw rbw) =>
-      Build(
-        0x1F,
-        (byte)receiver,
-        (byte)rbw);
 
     public static byte[] BuildMarkerPosition(
       Icom9700ScopeMarkerPosition position) =>
