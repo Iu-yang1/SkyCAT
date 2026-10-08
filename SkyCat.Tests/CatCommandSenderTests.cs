@@ -188,6 +188,48 @@ namespace SkyCat.Tests
     }
 
     [Fact]
+    public void RemainingScopeBuildersMatchCivWireFormat()
+    {
+      Assert.Equal(
+        new byte[]
+        {
+          0xFE, 0xFE, 0xA2, 0xE0,
+          0x27, 0x1B, 0x01, 0xFD
+        },
+        Icom9700ScopeCommands.BuildScopeDuringTx(
+          true));
+
+      Assert.Equal(
+        new byte[]
+        {
+          0xFE, 0xFE, 0xA2, 0xE0,
+          0x27, 0x1C, 0x02, 0xFD
+        },
+        Icom9700ScopeCommands.BuildCenterType(
+          Icom9700ScopeCenterType.CarrierPointAbsolute));
+
+      Assert.Equal(
+        new byte[]
+        {
+          0xFE, 0xFE, 0xA2, 0xE0,
+          0x27, 0x1D, 0x01, 0x01, 0xFD
+        },
+        Icom9700ScopeCommands.BuildVbw(
+          Icom9700ScopeReceiver.Sub,
+          Icom9700ScopeVbw.Wide));
+
+      Assert.Equal(
+        new byte[]
+        {
+          0xFE, 0xFE, 0xA2, 0xE0,
+          0x27, 0x20, 0x01, 0xFD
+        },
+        Icom9700ScopeCommands.BuildMarkerPosition(
+          Icom9700ScopeMarkerPosition.CarrierPoint));
+    }
+
+
+    [Fact]
     public void ScopeFixedEdgeBuilderUsesFrequencyRangeAndBcdEdges()
     {
       Assert.Equal(
