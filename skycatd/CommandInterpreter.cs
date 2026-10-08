@@ -168,6 +168,13 @@ namespace skycatd
             () => CommandSender.SetIcomScopeMarkerPosition(
               scopeMarkerPosition)),
 
+        "U" when args.Length == 2 &&
+                 args[1] == "SCOPE_READ" =>
+          ExecuteScopeQuery(
+            () => CommandSender
+              .ReadIcomScopeSnapshot()
+              .ToProtocolString()),
+
         // setup
         "S" when args.Length == 3 && args[1] == "0" => Setup(OperatingMode.Simplex),
         "S" when args.Length == 3 && args[1] == "1" && args[2] != "Sub" => Setup(OperatingMode.Split),
@@ -250,6 +257,58 @@ namespace skycatd
         CommandSender.Log?.LogError(
           ex,
           "Scope command failed.");
+        return "RPRT -7";
+      }
+    }
+
+    private string ExecuteScopeQuery(
+      Func<string> query)
+    {
+      try
+      {
+        return query();
+      }
+      catch (ArgumentOutOfRangeException ex)
+      {
+        CommandSender.Log?.LogError(
+          $"Scope query value rejected: {ex.Message}");
+        return "RPRT -1";
+      }
+      catch (ArgumentException ex)
+      {
+        CommandSender.Log?.LogError(
+          $"Scope query rejected: {ex.Message}");
+        return "RPRT -1";
+      }
+      catch (InvalidReplyException ex)
+      {
+        CommandSender.Log?.LogError(
+          $"Scope query rejected by radio: {ex.Message}");
+        return "RPRT -9";
+      }
+      catch (TimeoutException ex)
+      {
+        CommandSender.Log?.LogError(
+          $"Scope query timed out: {ex.Message}");
+        return "RPRT -5";
+      }
+      catch (InvalidOperationException ex)
+      {
+        CommandSender.Log?.LogError(
+          $"Scope query failed: {ex.Message}");
+        return "RPRT -6";
+      }
+      catch (FormatException ex)
+      {
+        CommandSender.Log?.LogError(
+          $"Scope query returned malformed data: {ex.Message}");
+        return "RPRT -7";
+      }
+      catch (Exception ex)
+      {
+        CommandSender.Log?.LogError(
+          ex,
+          "Scope query failed.");
         return "RPRT -7";
       }
     }
