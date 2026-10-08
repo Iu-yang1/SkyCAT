@@ -159,18 +159,6 @@ namespace skycatd
             () => CommandSender.SetIcomScopeVbw(
               scopeVbwReceiver,
               scopeVbw)),
-        "U" when args.Length == 4 &&
-                 args[1] == "SCOPE_RBW" &&
-                 TryParseScopeReceiver(
-                   args[2],
-                   out var scopeRbwReceiver) &&
-                 TryParseScopeRbw(
-                   args[3],
-                   out var scopeRbw) =>
-          ExecuteScopeAction(
-            () => CommandSender.SetIcomScopeRbw(
-              scopeRbwReceiver,
-              scopeRbw)),
         "U" when args.Length == 3 &&
                  args[1] == "SCOPE_MARKER" &&
                  TryParseScopeMarkerPosition(
@@ -491,34 +479,6 @@ namespace skycatd
 
         default:
           vbw = default;
-          return false;
-      }
-    }
-
-    private static bool TryParseScopeRbw(
-      string value,
-      out Icom9700ScopeRbw rbw)
-    {
-      switch (value.ToUpperInvariant())
-      {
-        case "WIDE":
-          rbw =
-            Icom9700ScopeRbw.Wide;
-          return true;
-
-        case "MID":
-          rbw =
-            Icom9700ScopeRbw.Mid;
-          return true;
-
-        case "NAR":
-        case "NARROW":
-          rbw =
-            Icom9700ScopeRbw.Narrow;
-          return true;
-
-        default:
-          rbw = default;
           return false;
       }
     }
