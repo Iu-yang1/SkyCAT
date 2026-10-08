@@ -250,6 +250,160 @@ namespace SkyCat
           upperHz),
         $"scope fixed edge range {frequencyRange} edge {edgeNumber}: {lowerHz}-{upperHz} Hz");
 
+    public Icom9700ScopeSnapshot ReadIcomScopeSnapshot()
+    {
+      byte[] selected =
+        ReadIcom9700ScopeData(
+          0x12);
+
+      byte[] mainMode =
+        ReadIcom9700ScopeData(
+          0x14,
+          (byte)Icom9700ScopeReceiver.Main);
+      byte[] mainSpan =
+        ReadIcom9700ScopeData(
+          0x15,
+          (byte)Icom9700ScopeReceiver.Main);
+      byte[] mainEdge =
+        ReadIcom9700ScopeData(
+          0x16,
+          (byte)Icom9700ScopeReceiver.Main);
+      byte[] mainRef =
+        ReadIcom9700ScopeData(
+          0x19,
+          (byte)Icom9700ScopeReceiver.Main);
+      byte[] mainSpeed =
+        ReadIcom9700ScopeData(
+          0x1A,
+          (byte)Icom9700ScopeReceiver.Main);
+      byte[] mainVbw =
+        ReadIcom9700ScopeData(
+          0x1D,
+          (byte)Icom9700ScopeReceiver.Main);
+
+      byte[] subMode =
+        ReadIcom9700ScopeData(
+          0x14,
+          (byte)Icom9700ScopeReceiver.Sub);
+      byte[] subSpan =
+        ReadIcom9700ScopeData(
+          0x15,
+          (byte)Icom9700ScopeReceiver.Sub);
+      byte[] subEdge =
+        ReadIcom9700ScopeData(
+          0x16,
+          (byte)Icom9700ScopeReceiver.Sub);
+      byte[] subRef =
+        ReadIcom9700ScopeData(
+          0x19,
+          (byte)Icom9700ScopeReceiver.Sub);
+      byte[] subSpeed =
+        ReadIcom9700ScopeData(
+          0x1A,
+          (byte)Icom9700ScopeReceiver.Sub);
+      byte[] subVbw =
+        ReadIcom9700ScopeData(
+          0x1D,
+          (byte)Icom9700ScopeReceiver.Sub);
+
+      byte[] duringTx =
+        ReadIcom9700ScopeData(
+          0x1B);
+      byte[] centerType =
+        ReadIcom9700ScopeData(
+          0x1C);
+      byte[] marker =
+        ReadIcom9700ScopeData(
+          0x20);
+
+      return new Icom9700ScopeSnapshot
+      {
+        SelectedScope =
+          ParseEnumByte<Icom9700ScopeReceiver>(
+            selected,
+            0,
+            "selected scope"),
+
+        MainMode =
+          ParseScopedEnum<Icom9700ScopeMode>(
+            mainMode,
+            Icom9700ScopeReceiver.Main,
+            "MAIN mode"),
+        MainSpanHz =
+          ParseScopedSpan(
+            mainSpan,
+            Icom9700ScopeReceiver.Main),
+        MainEdge =
+          ParseScopedInteger(
+            mainEdge,
+            Icom9700ScopeReceiver.Main,
+            1,
+            4,
+            "MAIN edge"),
+        MainReferenceDb =
+          ParseScopedReference(
+            mainRef,
+            Icom9700ScopeReceiver.Main),
+        MainSpeed =
+          ParseScopedEnum<Icom9700ScopeSweepSpeed>(
+            mainSpeed,
+            Icom9700ScopeReceiver.Main,
+            "MAIN sweep speed"),
+        MainVbw =
+          ParseScopedEnum<Icom9700ScopeVbw>(
+            mainVbw,
+            Icom9700ScopeReceiver.Main,
+            "MAIN VBW"),
+
+        SubMode =
+          ParseScopedEnum<Icom9700ScopeMode>(
+            subMode,
+            Icom9700ScopeReceiver.Sub,
+            "SUB mode"),
+        SubSpanHz =
+          ParseScopedSpan(
+            subSpan,
+            Icom9700ScopeReceiver.Sub),
+        SubEdge =
+          ParseScopedInteger(
+            subEdge,
+            Icom9700ScopeReceiver.Sub,
+            1,
+            4,
+            "SUB edge"),
+        SubReferenceDb =
+          ParseScopedReference(
+            subRef,
+            Icom9700ScopeReceiver.Sub),
+        SubSpeed =
+          ParseScopedEnum<Icom9700ScopeSweepSpeed>(
+            subSpeed,
+            Icom9700ScopeReceiver.Sub,
+            "SUB sweep speed"),
+        SubVbw =
+          ParseScopedEnum<Icom9700ScopeVbw>(
+            subVbw,
+            Icom9700ScopeReceiver.Sub,
+            "SUB VBW"),
+
+        ScopeDuringTx =
+          ParseBooleanByte(
+            duringTx,
+            0,
+            "scope during TX"),
+        CenterType =
+          ParseEnumByte<Icom9700ScopeCenterType>(
+            centerType,
+            0,
+            "CENTER type"),
+        MarkerPosition =
+          ParseEnumByte<Icom9700ScopeMarkerPosition>(
+            marker,
+            0,
+            "marker position")
+      };
+    }
+
     public void SetIcomScopeSweepFast()
     {
       // Preserve the original extension contract: FAST applies to both MAIN
@@ -260,6 +414,220 @@ namespace SkyCat
       SetIcomScopeSweepSpeed(
         Icom9700ScopeReceiver.Sub,
         Icom9700ScopeSweepSpeed.Fast);
+    }
+
+    private byte[] ReadIcom9700ScopeData(
+      byte subCommand,
+      params byte[] selector)
+    {
+      EnsureIcom9700ScopeReady();
+
+      byte[] command =
+        Icom9700ScopeCommands.BuildQuery(
+          subCommand,
+          selector);
+
+      DumpUnexpectedBytes();
+      SerialPort.Write(
+        command,
+        0,
+        command.Length);
+      SkipEcho(
+        command);
+
+      const int totalTimeoutMs = 1500;
+      long deadline =
+        Environment.TickCount64 +
+        totalTimeoutMs;
+
+      while (Environment.TickCount64 <
+             deadline)
+      {
+        int remaining =
+          (int)Math.Max(
+            1,
+            deadline -
+            Environment.TickCount64);
+
+        byte[]? frame =
+          ReceiveCivFrame(
+            remaining);
+
+        if (frame == null)
+          break;
+
+        if (frame.Length == 6 &&
+            frame[0] == 0xFE &&
+            frame[1] == 0xFE &&
+            frame[4] == 0xFA &&
+            frame[5] == 0xFD)
+          throw new InvalidReplyException(
+            $"IC-9700 rejected scope read 27 {subCommand:X2}");
+
+        if (frame.Length >= 7 &&
+            frame[0] == 0xFE &&
+            frame[1] == 0xFE &&
+            frame[2] == 0xE0 &&
+            frame[3] == 0xA2 &&
+            frame[4] == 0x27 &&
+            frame[5] == subCommand &&
+            frame[^1] == 0xFD)
+        {
+          byte[] data =
+            frame
+              .Skip(6)
+              .Take(
+                frame.Length -
+                7)
+              .ToArray();
+
+          if (selector.Length == 0 ||
+              (data.Length >= selector.Length &&
+               data
+                 .Take(selector.Length)
+                 .SequenceEqual(selector)))
+            return data;
+        }
+
+        if (IsScopeWaveformFrame(
+              frame))
+          continue;
+
+        Log?.LogTrace(
+          $"Ignoring unrelated CI-V frame while reading scope state: {BitConverter.ToString(frame)}");
+      }
+
+      throw new TimeoutException(
+        $"Timed out reading IC-9700 scope command 27 {subCommand:X2}");
+    }
+
+    private void EnsureIcom9700ScopeReady()
+    {
+      EnsureIcom9700ScopeReady();
+    }
+
+    private static TEnum ParseEnumByte<TEnum>(
+      byte[] data,
+      int index,
+      string name)
+      where TEnum : struct, Enum
+    {
+      if (index < 0 ||
+          index >= data.Length ||
+          !Enum.IsDefined(
+            typeof(TEnum),
+            (int)data[index]))
+        throw new FormatException(
+          $"Invalid {name} returned by IC-9700.");
+
+      return (TEnum)Enum.ToObject(
+        typeof(TEnum),
+        data[index]);
+    }
+
+    private static TEnum ParseScopedEnum<TEnum>(
+      byte[] data,
+      Icom9700ScopeReceiver receiver,
+      string name)
+      where TEnum : struct, Enum
+    {
+      ValidateScopeSelector(
+        data,
+        receiver,
+        2,
+        name);
+
+      return ParseEnumByte<TEnum>(
+        data,
+        1,
+        name);
+    }
+
+    private static int ParseScopedInteger(
+      byte[] data,
+      Icom9700ScopeReceiver receiver,
+      int minimum,
+      int maximum,
+      string name)
+    {
+      ValidateScopeSelector(
+        data,
+        receiver,
+        2,
+        name);
+
+      int value =
+        data[1];
+
+      if (value < minimum ||
+          value > maximum)
+        throw new FormatException(
+          $"Invalid {name} returned by IC-9700.");
+
+      return value;
+    }
+
+    private static long ParseScopedSpan(
+      byte[] data,
+      Icom9700ScopeReceiver receiver)
+    {
+      ValidateScopeSelector(
+        data,
+        receiver,
+        6,
+        "scope span");
+
+      return
+        Icom9700ScopeCommands
+          .DecodeFrequencyBcdLe(
+            data.AsSpan(
+              1,
+              5));
+    }
+
+    private static double ParseScopedReference(
+      byte[] data,
+      Icom9700ScopeReceiver receiver)
+    {
+      ValidateScopeSelector(
+        data,
+        receiver,
+        4,
+        "scope reference level");
+
+      return
+        Icom9700ScopeCommands
+          .DecodeReferenceLevel(
+            data.AsSpan(
+              1,
+              3));
+    }
+
+    private static bool ParseBooleanByte(
+      byte[] data,
+      int index,
+      string name)
+    {
+      if (index < 0 ||
+          index >= data.Length ||
+          data[index] > 1)
+        throw new FormatException(
+          $"Invalid {name} returned by IC-9700.");
+
+      return data[index] == 1;
+    }
+
+    private static void ValidateScopeSelector(
+      byte[] data,
+      Icom9700ScopeReceiver receiver,
+      int minimumLength,
+      string name)
+    {
+      if (data.Length < minimumLength ||
+          data[0] !=
+            (byte)receiver)
+        throw new FormatException(
+          $"Invalid {name} receiver returned by IC-9700.");
     }
 
     private void SendIcom9700ScopeCommand(
