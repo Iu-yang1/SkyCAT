@@ -40,6 +40,88 @@ namespace SkyCat
     CarrierPoint = 0x01
   }
 
+  public sealed class Icom9700ScopeSnapshot
+  {
+    public Icom9700ScopeReceiver SelectedScope { get; init; }
+
+    public Icom9700ScopeMode MainMode { get; init; }
+    public long MainSpanHz { get; init; }
+    public int MainEdge { get; init; }
+    public double MainReferenceDb { get; init; }
+    public Icom9700ScopeSweepSpeed MainSpeed { get; init; }
+    public Icom9700ScopeVbw MainVbw { get; init; }
+
+    public Icom9700ScopeMode SubMode { get; init; }
+    public long SubSpanHz { get; init; }
+    public int SubEdge { get; init; }
+    public double SubReferenceDb { get; init; }
+    public Icom9700ScopeSweepSpeed SubSpeed { get; init; }
+    public Icom9700ScopeVbw SubVbw { get; init; }
+
+    public bool ScopeDuringTx { get; init; }
+    public Icom9700ScopeCenterType CenterType { get; init; }
+    public Icom9700ScopeMarkerPosition MarkerPosition { get; init; }
+
+    public string ToProtocolString() =>
+      string.Join(
+        ';',
+        $"SELECT={FormatReceiver(SelectedScope)}",
+        $"MAIN.MODE={FormatMode(MainMode)}",
+        $"MAIN.SPAN={MainSpanHz}",
+        $"MAIN.EDGE={MainEdge}",
+        $"MAIN.REF={MainReferenceDb.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)}",
+        $"MAIN.SPEED={MainSpeed.ToString().ToUpperInvariant()}",
+        $"MAIN.VBW={MainVbw.ToString().ToUpperInvariant()}",
+        $"SUB.MODE={FormatMode(SubMode)}",
+        $"SUB.SPAN={SubSpanHz}",
+        $"SUB.EDGE={SubEdge}",
+        $"SUB.REF={SubReferenceDb.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)}",
+        $"SUB.SPEED={SubSpeed.ToString().ToUpperInvariant()}",
+        $"SUB.VBW={SubVbw.ToString().ToUpperInvariant()}",
+        $"TX={(ScopeDuringTx ? 1 : 0)}",
+        $"CENTER={FormatCenterType(CenterType)}",
+        $"MARKER={(MarkerPosition == Icom9700ScopeMarkerPosition.CarrierPoint ? "CARRIER" : "FILTER")}");
+
+    private static string FormatReceiver(
+      Icom9700ScopeReceiver receiver) =>
+      receiver ==
+        Icom9700ScopeReceiver.Sub
+          ? "SUB"
+          : "MAIN";
+
+    private static string FormatMode(
+      Icom9700ScopeMode mode) =>
+      mode switch
+      {
+        Icom9700ScopeMode.Center =>
+          "CENTER",
+        Icom9700ScopeMode.Fixed =>
+          "FIXED",
+        Icom9700ScopeMode.ScrollCenter =>
+          "SCROLL-C",
+        Icom9700ScopeMode.ScrollFixed =>
+          "SCROLL-F",
+        _ =>
+          throw new ArgumentOutOfRangeException(
+            nameof(mode))
+      };
+
+    private static string FormatCenterType(
+      Icom9700ScopeCenterType type) =>
+      type switch
+      {
+        Icom9700ScopeCenterType.FilterCenter =>
+          "FILTER",
+        Icom9700ScopeCenterType.CarrierPoint =>
+          "CARRIER",
+        Icom9700ScopeCenterType.CarrierPointAbsolute =>
+          "ABS",
+        _ =>
+          throw new ArgumentOutOfRangeException(
+            nameof(type))
+      };
+  }
+
   /// <summary>
   /// Pure builders for IC-9700 CI-V spectrum-scope commands.
   /// Keeping wire encoding out of the daemon command parser makes the byte
@@ -245,6 +327,80 @@ namespace SkyCat
           .. EncodeFrequencyBcdLe(lowerHz),
           .. EncodeFrequencyBcdLe(upperHz)
         ]);
+    }
+
+    public static byte[] BuildQuery(
+      byte subCommand,
+      params byte[] selector) =>
+      Build(
+        subCommand,
+        selector);
+
+    public static long DecodeFrequencyBcdLe(
+      ReadOnlySpan<byte> bytes)
+    {
+      if (bytes.Length != 5)
+        throw new ArgumentException(
+          "IC-9700 scope frequency requires exactly five BCD bytes.",
+          nameof(bytes));
+
+      long value = 0;
+      long multiplier = 1;
+
+      for (int i = 0;
+           i < bytes.Length;
+           i++)
+      {
+        int low =
+          bytes[i] & 0x0F;
+        int high =
+          (bytes[i] >> 4) & 0x0F;
+
+        if (low > 9 ||
+            high > 9)
+          throw new FormatException(
+            "Invalid BCD frequency returned by IC-9700.");
+
+        value +=
+          (low +
+           high * 10L) *
+          multiplier;
+        multiplier *= 100;
+      }
+
+      return value;
+    }
+
+    public static double DecodeReferenceLevel(
+      ReadOnlySpan<byte> bytes)
+    {
+      if (bytes.Length != 3)
+        throw new ArgumentException(
+          "IC-9700 scope reference level requires three bytes.",
+          nameof(bytes));
+
+      int tens =
+        (bytes[0] >> 4) & 0x0F;
+      int ones =
+        bytes[0] & 0x0F;
+      int tenths =
+        (bytes[1] >> 4) & 0x0F;
+
+      if (tens > 9 ||
+          ones > 9 ||
+          tenths > 9 ||
+          bytes[2] > 1)
+        throw new FormatException(
+          "Invalid IC-9700 scope reference-level reply.");
+
+      double value =
+        tens * 10 +
+        ones +
+        tenths / 10.0;
+
+      return bytes[2] == 1
+        ? -value
+        : value;
     }
 
     private static byte[] Build(
