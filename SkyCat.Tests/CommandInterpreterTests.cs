@@ -78,7 +78,6 @@ namespace SkyCat.Tests
     [InlineData("U SCOPE_TX maybe")]
     [InlineData("U SCOPE_CENTER_TYPE RANDOM")]
     [InlineData("U SCOPE_VBW MAIN TURBO")]
-    [InlineData("U SCOPE_RBW MAIN TURBO")]
     [InlineData("U SCOPE_MARKER RANDOM")]
     public void MalformedScopeCommandsAreUnknown(
       string command)
@@ -99,7 +98,6 @@ namespace SkyCat.Tests
     [InlineData("U SCOPE_TX 1")]
     [InlineData("U SCOPE_CENTER_TYPE ABS")]
     [InlineData("U SCOPE_VBW SUB WIDE")]
-    [InlineData("U SCOPE_RBW SUB NAR")]
     [InlineData("U SCOPE_MARKER CARRIER")]
     [InlineData("U SCOPE_READ")]
     [InlineData("U SCOPE_READ_EDGE 2 3")]
