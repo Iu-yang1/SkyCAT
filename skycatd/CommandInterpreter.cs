@@ -131,6 +131,42 @@ namespace skycatd
               fixedEdgeNumber,
               lowerEdgeHz,
               upperEdgeHz)),
+        "U" when args.Length == 3 &&
+                 args[1] == "SCOPE_TX" &&
+                 TryParseBoolean01(
+                   args[2],
+                   out var scopeDuringTx) =>
+          ExecuteScopeAction(
+            () => CommandSender.SetIcomScopeDuringTx(
+              scopeDuringTx)),
+        "U" when args.Length == 3 &&
+                 args[1] == "SCOPE_CENTER_TYPE" &&
+                 TryParseScopeCenterType(
+                   args[2],
+                   out var scopeCenterType) =>
+          ExecuteScopeAction(
+            () => CommandSender.SetIcomScopeCenterType(
+              scopeCenterType)),
+        "U" when args.Length == 4 &&
+                 args[1] == "SCOPE_VBW" &&
+                 TryParseScopeReceiver(
+                   args[2],
+                   out var scopeVbwReceiver) &&
+                 TryParseScopeVbw(
+                   args[3],
+                   out var scopeVbw) =>
+          ExecuteScopeAction(
+            () => CommandSender.SetIcomScopeVbw(
+              scopeVbwReceiver,
+              scopeVbw)),
+        "U" when args.Length == 3 &&
+                 args[1] == "SCOPE_MARKER" &&
+                 TryParseScopeMarkerPosition(
+                   args[2],
+                   out var scopeMarkerPosition) =>
+          ExecuteScopeAction(
+            () => CommandSender.SetIcomScopeMarkerPosition(
+              scopeMarkerPosition)),
 
         // setup
         "S" when args.Length == 3 && args[1] == "0" => Setup(OperatingMode.Simplex),
@@ -295,6 +331,99 @@ namespace skycatd
 
         default:
           speed = default;
+          return false;
+      }
+    }
+
+    private static bool TryParseBoolean01(
+      string value,
+      out bool enabled)
+    {
+      switch (value)
+      {
+        case "0":
+          enabled = false;
+          return true;
+
+        case "1":
+          enabled = true;
+          return true;
+
+        default:
+          enabled = false;
+          return false;
+      }
+    }
+
+    private static bool TryParseScopeCenterType(
+      string value,
+      out Icom9700ScopeCenterType type)
+    {
+      switch (value.ToUpperInvariant())
+      {
+        case "FILTER":
+          type =
+            Icom9700ScopeCenterType.FilterCenter;
+          return true;
+
+        case "CARRIER":
+          type =
+            Icom9700ScopeCenterType.CarrierPoint;
+          return true;
+
+        case "ABS":
+        case "ABSOLUTE":
+          type =
+            Icom9700ScopeCenterType.CarrierPointAbsolute;
+          return true;
+
+        default:
+          type = default;
+          return false;
+      }
+    }
+
+    private static bool TryParseScopeVbw(
+      string value,
+      out Icom9700ScopeVbw vbw)
+    {
+      switch (value.ToUpperInvariant())
+      {
+        case "NARROW":
+        case "NAR":
+          vbw =
+            Icom9700ScopeVbw.Narrow;
+          return true;
+
+        case "WIDE":
+          vbw =
+            Icom9700ScopeVbw.Wide;
+          return true;
+
+        default:
+          vbw = default;
+          return false;
+      }
+    }
+
+    private static bool TryParseScopeMarkerPosition(
+      string value,
+      out Icom9700ScopeMarkerPosition position)
+    {
+      switch (value.ToUpperInvariant())
+      {
+        case "FILTER":
+          position =
+            Icom9700ScopeMarkerPosition.FilterCenter;
+          return true;
+
+        case "CARRIER":
+          position =
+            Icom9700ScopeMarkerPosition.CarrierPoint;
+          return true;
+
+        default:
+          position = default;
           return false;
       }
     }
