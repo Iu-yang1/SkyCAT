@@ -174,6 +174,24 @@ namespace skycatd
             () => CommandSender
               .ReadIcomScopeSnapshot()
               .ToProtocolString()),
+        "U" when args.Length == 4 &&
+                 args[1] == "SCOPE_READ_EDGE" &&
+                 int.TryParse(
+                   args[2],
+                   NumberStyles.Integer,
+                   CultureInfo.InvariantCulture,
+                   out var readEdgeRange) &&
+                 int.TryParse(
+                   args[3],
+                   NumberStyles.Integer,
+                   CultureInfo.InvariantCulture,
+                   out var readEdgeNumber) =>
+          ExecuteScopeQuery(
+            () => CommandSender
+              .ReadIcomScopeFixedEdge(
+                readEdgeRange,
+                readEdgeNumber)
+              .ToProtocolString()),
 
         // setup
         "S" when args.Length == 3 && args[1] == "0" => Setup(OperatingMode.Simplex),
