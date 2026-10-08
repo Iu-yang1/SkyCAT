@@ -74,6 +74,10 @@ namespace SkyCat.Tests
     [InlineData("U SCOPE_REF MAIN nope")]
     [InlineData("U SCOPE_SPEED MAIN TURBO")]
     [InlineData("U SCOPE_FIXED_EDGE 2 1 435000000")]
+    [InlineData("U SCOPE_TX maybe")]
+    [InlineData("U SCOPE_CENTER_TYPE RANDOM")]
+    [InlineData("U SCOPE_VBW MAIN TURBO")]
+    [InlineData("U SCOPE_MARKER RANDOM")]
     public void MalformedScopeCommandsAreUnknown(
       string command)
     {
@@ -90,6 +94,10 @@ namespace SkyCat.Tests
     [InlineData("U SCOPE_REF MAIN -3.5")]
     [InlineData("U SCOPE_SPEED MAIN FAST")]
     [InlineData("U SCOPE_FIXED_EDGE 2 1 435000000 436000000")]
+    [InlineData("U SCOPE_TX 1")]
+    [InlineData("U SCOPE_CENTER_TYPE ABS")]
+    [InlineData("U SCOPE_VBW SUB WIDE")]
+    [InlineData("U SCOPE_MARKER CARRIER")]
     public void ValidScopeCommandsFailCleanlyWithoutOpenSerial(
       string command)
     {
