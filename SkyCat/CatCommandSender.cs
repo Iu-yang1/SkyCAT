@@ -576,16 +576,22 @@ namespace SkyCat
       where TEnum : struct, Enum
     {
       if (index < 0 ||
-          index >= data.Length ||
-          !Enum.IsDefined(
-            typeof(TEnum),
-            (int)data[index]))
+          index >= data.Length)
         throw new FormatException(
           $"Invalid {name} returned by IC-9700.");
 
-      return (TEnum)Enum.ToObject(
-        typeof(TEnum),
-        data[index]);
+      TEnum value =
+        (TEnum)Enum.ToObject(
+          typeof(TEnum),
+          data[index]);
+
+      if (!Enum.IsDefined(
+            typeof(TEnum),
+            value))
+        throw new FormatException(
+          $"Invalid {name} returned by IC-9700.");
+
+      return value;
     }
 
     private static TEnum ParseScopedEnum<TEnum>(
