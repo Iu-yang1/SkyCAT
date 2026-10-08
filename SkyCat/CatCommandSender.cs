@@ -503,7 +503,16 @@ namespace SkyCat
 
     private void EnsureIcom9700ScopeReady()
     {
-      EnsureIcom9700ScopeReady();
+      if (!SerialPort.IsOpen)
+        throw new InvalidOperationException(
+          "Serial port is not open");
+
+      if (!string.Equals(
+            RadioName,
+            "IC-9700",
+            StringComparison.OrdinalIgnoreCase))
+        throw new InvalidOperationException(
+          $"Spectrum-scope control is only implemented for IC-9700, current radio is '{RadioName}'.");
     }
 
     private static TEnum ParseEnumByte<TEnum>(
@@ -634,16 +643,7 @@ namespace SkyCat
       byte[] command,
       string comment)
     {
-      if (!SerialPort.IsOpen)
-        throw new InvalidOperationException(
-          "Serial port is not open");
-
-      if (!string.Equals(
-            RadioName,
-            "IC-9700",
-            StringComparison.OrdinalIgnoreCase))
-        throw new InvalidOperationException(
-          $"Spectrum-scope control is only implemented for IC-9700, current radio is '{RadioName}'.");
+      EnsureIcom9700ScopeReady();
 
       var message =
         new CatMessage
