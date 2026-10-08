@@ -249,6 +249,34 @@ namespace SkyCat.Tests
     }
 
     [Fact]
+    public void FixedEdgeReadQueryUsesRangeAndEdgeSelector()
+    {
+      Assert.Equal(
+        new byte[]
+        {
+          0xFE, 0xFE, 0xA2, 0xE0,
+          0x27, 0x1E, 0x02, 0x03, 0xFD
+        },
+        Icom9700ScopeCommands.BuildFixedEdgeQuery(
+          2,
+          3));
+
+      var snapshot =
+        new Icom9700FixedEdgeSnapshot
+        {
+          FrequencyRange = 2,
+          EdgeNumber = 3,
+          LowerHz = 435_000_000,
+          UpperHz = 436_000_000
+        };
+
+      Assert.Equal(
+        "RANGE=2;EDGE=3;LOWER=435000000;UPPER=436000000",
+        snapshot.ToProtocolString());
+    }
+
+
+    [Fact]
     public void ScopeReadQueryAndDecodersMatchCivFormat()
     {
       Assert.Equal(
