@@ -74,6 +74,7 @@ namespace SkyCat.Tests
     [InlineData("U SCOPE_REF MAIN nope")]
     [InlineData("U SCOPE_SPEED MAIN TURBO")]
     [InlineData("U SCOPE_FIXED_EDGE 2 1 435000000")]
+    [InlineData("U SCOPE_READ_EDGE 2 nope")]
     [InlineData("U SCOPE_TX maybe")]
     [InlineData("U SCOPE_CENTER_TYPE RANDOM")]
     [InlineData("U SCOPE_VBW MAIN TURBO")]
@@ -99,6 +100,7 @@ namespace SkyCat.Tests
     [InlineData("U SCOPE_VBW SUB WIDE")]
     [InlineData("U SCOPE_MARKER CARRIER")]
     [InlineData("U SCOPE_READ")]
+    [InlineData("U SCOPE_READ_EDGE 2 3")]
     public void ValidScopeCommandsFailCleanlyWithoutOpenSerial(
       string command)
     {
