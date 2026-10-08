@@ -222,16 +222,6 @@ namespace SkyCat.Tests
         new byte[]
         {
           0xFE, 0xFE, 0xA2, 0xE0,
-          0x27, 0x1F, 0x01, 0x02, 0xFD
-        },
-        Icom9700ScopeCommands.BuildRbw(
-          Icom9700ScopeReceiver.Sub,
-          Icom9700ScopeRbw.Narrow));
-
-      Assert.Equal(
-        new byte[]
-        {
-          0xFE, 0xFE, 0xA2, 0xE0,
           0x27, 0x20, 0x01, 0xFD
         },
         Icom9700ScopeCommands.BuildMarkerPosition(
@@ -335,8 +325,6 @@ namespace SkyCat.Tests
             Icom9700ScopeSweepSpeed.Fast,
           MainVbw =
             Icom9700ScopeVbw.Wide,
-          MainRbw =
-            Icom9700ScopeRbw.Mid,
           SubMode =
             Icom9700ScopeMode.ScrollFixed,
           SubSpanHz =
@@ -347,8 +335,6 @@ namespace SkyCat.Tests
             Icom9700ScopeSweepSpeed.Mid,
           SubVbw =
             Icom9700ScopeVbw.Narrow,
-          SubRbw =
-            Icom9700ScopeRbw.Narrow,
           ScopeDuringTx = true,
           CenterType =
             Icom9700ScopeCenterType.CarrierPointAbsolute,
@@ -364,14 +350,12 @@ namespace SkyCat.Tests
         "MAIN.REF=-3.5;" +
         "MAIN.SPEED=FAST;" +
         "MAIN.VBW=WIDE;" +
-        "MAIN.RBW=MID;" +
         "SUB.MODE=SCROLL-F;" +
         "SUB.SPAN=50000;" +
         "SUB.EDGE=2;" +
         "SUB.REF=1.0;" +
         "SUB.SPEED=MID;" +
         "SUB.VBW=NARROW;" +
-        "SUB.RBW=NARROW;" +
         "TX=1;" +
         "CENTER=ABS;" +
         "MARKER=CARRIER",
