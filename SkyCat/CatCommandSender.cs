@@ -207,6 +207,36 @@ namespace SkyCat
           speed),
         $"scope {receiver} sweep speed {speed}");
 
+    public void SetIcomScopeDuringTx(
+      bool enabled) =>
+      SendIcom9700ScopeCommand(
+        Icom9700ScopeCommands.BuildScopeDuringTx(
+          enabled),
+        $"scope during TX {(enabled ? "on" : "off")}");
+
+    public void SetIcomScopeCenterType(
+      Icom9700ScopeCenterType type) =>
+      SendIcom9700ScopeCommand(
+        Icom9700ScopeCommands.BuildCenterType(
+          type),
+        $"scope CENTER display {type}");
+
+    public void SetIcomScopeVbw(
+      Icom9700ScopeReceiver receiver,
+      Icom9700ScopeVbw vbw) =>
+      SendIcom9700ScopeCommand(
+        Icom9700ScopeCommands.BuildVbw(
+          receiver,
+          vbw),
+        $"scope {receiver} VBW {vbw}");
+
+    public void SetIcomScopeMarkerPosition(
+      Icom9700ScopeMarkerPosition position) =>
+      SendIcom9700ScopeCommand(
+        Icom9700ScopeCommands.BuildMarkerPosition(
+          position),
+        $"scope marker position {position}");
+
     public void SetIcomScopeFixedEdge(
       int frequencyRange,
       int edgeNumber,
