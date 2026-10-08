@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.Logging;
+using System.Globalization;
 using Serilog.Core;
 using SkyCat;
 namespace skycatd
@@ -44,6 +45,86 @@ namespace skycatd
         "U" when args.Length == 3 && args[1] == "SCOPE_DATA" && args[2] == "1" => SendCommandIfAvailable(CatCommand.enable_scope_data),
         "U" when args.Length == 3 && args[1] == "SCOPE_DATA" && args[2] == "0" => SendCommandIfAvailable(CatCommand.disable_scope_data),
         "U" when args.Length == 3 && args[1] == "SCOPE_FAST" && args[2] == "1" => SetScopeFast(),
+        "U" when args.Length == 4 &&
+                 args[1] == "SCOPE_MODE" &&
+                 TryParseScopeReceiver(args[2], out var scopeModeReceiver) &&
+                 TryParseScopeMode(args[3], out var scopeMode) =>
+          ExecuteScopeAction(
+            () => CommandSender.SetIcomScopeMode(
+              scopeModeReceiver,
+              scopeMode)),
+        "U" when args.Length == 4 &&
+                 args[1] == "SCOPE_SPAN" &&
+                 TryParseScopeReceiver(args[2], out var scopeSpanReceiver) &&
+                 long.TryParse(
+                   args[3],
+                   NumberStyles.Integer,
+                   CultureInfo.InvariantCulture,
+                   out var scopeSpanHz) =>
+          ExecuteScopeAction(
+            () => CommandSender.SetIcomScopeSpan(
+              scopeSpanReceiver,
+              scopeSpanHz)),
+        "U" when args.Length == 4 &&
+                 args[1] == "SCOPE_EDGE" &&
+                 TryParseScopeReceiver(args[2], out var scopeEdgeReceiver) &&
+                 int.TryParse(
+                   args[3],
+                   NumberStyles.Integer,
+                   CultureInfo.InvariantCulture,
+                   out var scopeEdgeNumber) =>
+          ExecuteScopeAction(
+            () => CommandSender.SetIcomScopeEdge(
+              scopeEdgeReceiver,
+              scopeEdgeNumber)),
+        "U" when args.Length == 4 &&
+                 args[1] == "SCOPE_REF" &&
+                 TryParseScopeReceiver(args[2], out var scopeRefReceiver) &&
+                 double.TryParse(
+                   args[3],
+                   NumberStyles.Float,
+                   CultureInfo.InvariantCulture,
+                   out var scopeReferenceDb) =>
+          ExecuteScopeAction(
+            () => CommandSender.SetIcomScopeReferenceLevel(
+              scopeRefReceiver,
+              scopeReferenceDb)),
+        "U" when args.Length == 4 &&
+                 args[1] == "SCOPE_SPEED" &&
+                 TryParseScopeReceiver(args[2], out var scopeSpeedReceiver) &&
+                 TryParseScopeSpeed(args[3], out var scopeSpeed) =>
+          ExecuteScopeAction(
+            () => CommandSender.SetIcomScopeSweepSpeed(
+              scopeSpeedReceiver,
+              scopeSpeed)),
+        "U" when args.Length == 6 &&
+                 args[1] == "SCOPE_FIXED_EDGE" &&
+                 int.TryParse(
+                   args[2],
+                   NumberStyles.Integer,
+                   CultureInfo.InvariantCulture,
+                   out var scopeRange) &&
+                 int.TryParse(
+                   args[3],
+                   NumberStyles.Integer,
+                   CultureInfo.InvariantCulture,
+                   out var fixedEdgeNumber) &&
+                 long.TryParse(
+                   args[4],
+                   NumberStyles.Integer,
+                   CultureInfo.InvariantCulture,
+                   out var lowerEdgeHz) &&
+                 long.TryParse(
+                   args[5],
+                   NumberStyles.Integer,
+                   CultureInfo.InvariantCulture,
+                   out var upperEdgeHz) =>
+          ExecuteScopeAction(
+            () => CommandSender.SetIcomScopeFixedEdge(
+              scopeRange,
+              fixedEdgeNumber,
+              lowerEdgeHz,
+              upperEdgeHz)),
 
         // setup
         "S" when args.Length == 3 && args[1] == "0" => Setup(OperatingMode.Simplex),
@@ -80,32 +161,135 @@ namespace skycatd
     private string CmdT1(string value) => SendCommandIfAvailable(CatCommand.write_ptt_on, value);
     private string CmdC(int toneTenthsHz) => SendCommandIfAvailable(CatCommand.write_ctcss_tone, toneTenthsHz.ToString());
 
-    private string SetScopeFast()
+    private string SetScopeFast() =>
+      ExecuteScopeAction(
+        CommandSender.SetIcomScopeSweepFast);
+
+    private string ExecuteScopeAction(
+      Action action)
     {
       try
       {
-        CommandSender.SetIcomScopeSweepFast();
+        action();
         return "RPRT 0";
+      }
+      catch (ArgumentOutOfRangeException ex)
+      {
+        CommandSender.Log?.LogError(
+          $"Scope command value rejected: {ex.Message}");
+        return "RPRT -1";
+      }
+      catch (ArgumentException ex)
+      {
+        CommandSender.Log?.LogError(
+          $"Scope command rejected: {ex.Message}");
+        return "RPRT -1";
       }
       catch (InvalidReplyException ex)
       {
-        CommandSender.Log?.LogError($"Scope speed command rejected: {ex.Message}");
+        CommandSender.Log?.LogError(
+          $"Scope command rejected by radio: {ex.Message}");
         return "RPRT -9";
       }
       catch (TimeoutException ex)
       {
-        CommandSender.Log?.LogError($"Scope speed command timed out: {ex.Message}");
+        CommandSender.Log?.LogError(
+          $"Scope command timed out: {ex.Message}");
         return "RPRT -5";
       }
       catch (InvalidOperationException ex)
       {
-        CommandSender.Log?.LogError($"Scope speed command failed: {ex.Message}");
+        CommandSender.Log?.LogError(
+          $"Scope command failed: {ex.Message}");
         return "RPRT -6";
       }
       catch (Exception ex)
       {
-        CommandSender.Log?.LogError(ex, "Scope speed command failed.");
+        CommandSender.Log?.LogError(
+          ex,
+          "Scope command failed.");
         return "RPRT -7";
+      }
+    }
+
+    private static bool TryParseScopeReceiver(
+      string value,
+      out Icom9700ScopeReceiver receiver)
+    {
+      switch (value.ToUpperInvariant())
+      {
+        case "MAIN":
+          receiver =
+            Icom9700ScopeReceiver.Main;
+          return true;
+
+        case "SUB":
+          receiver =
+            Icom9700ScopeReceiver.Sub;
+          return true;
+
+        default:
+          receiver = default;
+          return false;
+      }
+    }
+
+    private static bool TryParseScopeMode(
+      string value,
+      out Icom9700ScopeMode mode)
+    {
+      switch (value.ToUpperInvariant())
+      {
+        case "CENTER":
+          mode =
+            Icom9700ScopeMode.Center;
+          return true;
+
+        case "FIXED":
+          mode =
+            Icom9700ScopeMode.Fixed;
+          return true;
+
+        case "SCROLL-C":
+          mode =
+            Icom9700ScopeMode.ScrollCenter;
+          return true;
+
+        case "SCROLL-F":
+          mode =
+            Icom9700ScopeMode.ScrollFixed;
+          return true;
+
+        default:
+          mode = default;
+          return false;
+      }
+    }
+
+    private static bool TryParseScopeSpeed(
+      string value,
+      out Icom9700ScopeSweepSpeed speed)
+    {
+      switch (value.ToUpperInvariant())
+      {
+        case "FAST":
+          speed =
+            Icom9700ScopeSweepSpeed.Fast;
+          return true;
+
+        case "MID":
+          speed =
+            Icom9700ScopeSweepSpeed.Mid;
+          return true;
+
+        case "SLOW":
+          speed =
+            Icom9700ScopeSweepSpeed.Slow;
+          return true;
+
+        default:
+          speed = default;
+          return false;
       }
     }
 

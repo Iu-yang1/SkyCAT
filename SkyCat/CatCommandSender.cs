@@ -155,41 +155,113 @@ namespace SkyCat
 
 
 
+    public void SetIcomScopeMode(
+      Icom9700ScopeReceiver receiver,
+      Icom9700ScopeMode mode) =>
+      SendIcom9700ScopeCommand(
+        Icom9700ScopeCommands.BuildMode(
+          receiver,
+          mode),
+        $"scope {receiver} mode {mode}");
+
+    public void SetIcomScopeSpan(
+      Icom9700ScopeReceiver receiver,
+      long spanHz) =>
+      SendIcom9700ScopeCommand(
+        Icom9700ScopeCommands.BuildSpan(
+          receiver,
+          spanHz),
+        $"scope {receiver} span {spanHz} Hz");
+
+    public void SetIcomScopeEdge(
+      Icom9700ScopeReceiver receiver,
+      int edgeNumber) =>
+      SendIcom9700ScopeCommand(
+        Icom9700ScopeCommands.BuildEdge(
+          receiver,
+          edgeNumber),
+        $"scope {receiver} edge {edgeNumber}");
+
+    public void SetIcomScopeReferenceLevel(
+      Icom9700ScopeReceiver receiver,
+      double referenceDb) =>
+      SendIcom9700ScopeCommand(
+        Icom9700ScopeCommands.BuildReferenceLevel(
+          receiver,
+          referenceDb),
+        $"scope {receiver} reference {referenceDb:0.0} dB");
+
+    public void SetIcomScopeSweepSpeed(
+      Icom9700ScopeReceiver receiver,
+      Icom9700ScopeSweepSpeed speed) =>
+      SendIcom9700ScopeCommand(
+        Icom9700ScopeCommands.BuildSweepSpeed(
+          receiver,
+          speed),
+        $"scope {receiver} sweep speed {speed}");
+
+    public void SetIcomScopeFixedEdge(
+      int frequencyRange,
+      int edgeNumber,
+      long lowerHz,
+      long upperHz) =>
+      SendIcom9700ScopeCommand(
+        Icom9700ScopeCommands.BuildFixedEdge(
+          frequencyRange,
+          edgeNumber,
+          lowerHz,
+          upperHz),
+        $"scope fixed edge range {frequencyRange} edge {edgeNumber}: {lowerHz}-{upperHz} Hz");
+
     public void SetIcomScopeSweepFast()
     {
+      // Preserve the original extension contract: FAST applies to both MAIN
+      // and SUB so a later scope-band switch cannot inherit a slow setting.
+      SetIcomScopeSweepSpeed(
+        Icom9700ScopeReceiver.Main,
+        Icom9700ScopeSweepSpeed.Fast);
+      SetIcomScopeSweepSpeed(
+        Icom9700ScopeReceiver.Sub,
+        Icom9700ScopeSweepSpeed.Fast);
+    }
+
+    private void SendIcom9700ScopeCommand(
+      byte[] command,
+      string comment)
+    {
       if (!SerialPort.IsOpen)
-        throw new InvalidOperationException("Serial port is not open");
-
-      if (!string.Equals(RadioName, "IC-9700", StringComparison.OrdinalIgnoreCase))
         throw new InvalidOperationException(
-          $"Scope sweep speed control is only implemented for IC-9700, current radio is '{RadioName}'.");
+          "Serial port is not open");
 
-      // IC-9700 CI-V 27 1A:
-      // receiver 00=MAIN / 01=SUB, speed 00=FAST / 01=MID / 02=SLOW.
-      // Configure both scopes so Auto/MAIN/SUB selection in SkyRoof never inherits
-      // a slow front-panel setting left behind by a previous RS-BA1 session.
-      foreach (byte receiver in new byte[] { 0x00, 0x01 })
-      {
-        var message = new CatMessage
+      if (!string.Equals(
+            RadioName,
+            "IC-9700",
+            StringComparison.OrdinalIgnoreCase))
+        throw new InvalidOperationException(
+          $"Spectrum-scope control is only implemented for IC-9700, current radio is '{RadioName}'.");
+
+      var message =
+        new CatMessage
         {
-          Command = new byte?[]
-          {
-            0xFE, 0xFE, 0xA2, 0xE0,
-            0x27, 0x1A, receiver, 0x00,
+          Command =
+            command
+              .Select(
+                value =>
+                  (byte?)value)
+              .ToArray(),
+          Reply =
+          [
+            0xFE,
+            0xFE,
+            0xE0,
+            0xA2,
+            0xFB,
             0xFD
-          },
-          Reply = new byte?[]
-          {
-            0xFE, 0xFE, 0xE0, 0xA2, 0xFB, 0xFD
-          },
-          Comment =
-            receiver == 0
-              ? "MAIN scope sweep speed FAST"
-              : "SUB scope sweep speed FAST"
+          ],
+          Comment = comment
         };
 
-        _ = SendMessage(message);
-      }
+      _ = SendMessage(message);
     }
 
 

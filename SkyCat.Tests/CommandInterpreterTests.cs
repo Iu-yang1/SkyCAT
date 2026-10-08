@@ -65,5 +65,35 @@ namespace SkyCat.Tests
     {
       Assert.Equal("RPRT -11", Make().Execute("C notanumber"));
     }
+
+    [Theory]
+    [InlineData("U SCOPE_MODE MAIN BAD")]
+    [InlineData("U SCOPE_SPAN SIDE 50000")]
+    [InlineData("U SCOPE_EDGE MAIN nope")]
+    [InlineData("U SCOPE_REF MAIN nope")]
+    [InlineData("U SCOPE_SPEED MAIN TURBO")]
+    [InlineData("U SCOPE_FIXED_EDGE 2 1 435000000")]
+    public void MalformedScopeCommandsAreUnknown(
+      string command)
+    {
+      Assert.Equal(
+        "RPRT -11",
+        Make().Execute(command));
+    }
+
+    [Theory]
+    [InlineData("U SCOPE_MODE MAIN CENTER")]
+    [InlineData("U SCOPE_SPAN MAIN 50000")]
+    [InlineData("U SCOPE_EDGE MAIN 2")]
+    [InlineData("U SCOPE_REF MAIN -3.5")]
+    [InlineData("U SCOPE_SPEED MAIN FAST")]
+    [InlineData("U SCOPE_FIXED_EDGE 2 1 435000000 436000000")]
+    public void ValidScopeCommandsFailCleanlyWithoutOpenSerial(
+      string command)
+    {
+      Assert.Equal(
+        "RPRT -6",
+        Make().Execute(command));
+    }
   }
 }

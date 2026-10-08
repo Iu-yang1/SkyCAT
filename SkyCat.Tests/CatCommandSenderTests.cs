@@ -103,5 +103,134 @@ namespace SkyCat.Tests
       // ListAvailableCommands has not run yet, so nothing is available
       Assert.False(NewSender().IsCommandAvailable(CatCommand.read_rx_frequency));
     }
+
+    [Fact]
+    public void ScopeModeBuilderMatchesCivWireFormat()
+    {
+      Assert.Equal(
+        new byte[]
+        {
+          0xFE, 0xFE, 0xA2, 0xE0,
+          0x27, 0x14, 0x00, 0x03, 0xFD
+        },
+        Icom9700ScopeCommands.BuildMode(
+          Icom9700ScopeReceiver.Main,
+          Icom9700ScopeMode.ScrollFixed));
+    }
+
+    [Fact]
+    public void ScopeSpanBuilderUsesFiveByteLittleEndianBcd()
+    {
+      Assert.Equal(
+        new byte[]
+        {
+          0xFE, 0xFE, 0xA2, 0xE0,
+          0x27, 0x15, 0x01,
+          0x00, 0x00, 0x05, 0x00, 0x00,
+          0xFD
+        },
+        Icom9700ScopeCommands.BuildSpan(
+          Icom9700ScopeReceiver.Sub,
+          50_000));
+    }
+
+    [Fact]
+    public void ScopeEdgeAndSpeedBuildersMatchCivWireFormat()
+    {
+      Assert.Equal(
+        new byte[]
+        {
+          0xFE, 0xFE, 0xA2, 0xE0,
+          0x27, 0x16, 0x01, 0x04, 0xFD
+        },
+        Icom9700ScopeCommands.BuildEdge(
+          Icom9700ScopeReceiver.Sub,
+          4));
+
+      Assert.Equal(
+        new byte[]
+        {
+          0xFE, 0xFE, 0xA2, 0xE0,
+          0x27, 0x1A, 0x00, 0x02, 0xFD
+        },
+        Icom9700ScopeCommands.BuildSweepSpeed(
+          Icom9700ScopeReceiver.Main,
+          Icom9700ScopeSweepSpeed.Slow));
+    }
+
+    [Fact]
+    public void ScopeReferenceBuilderEncodesHalfDbAndSign()
+    {
+      Assert.Equal(
+        new byte[]
+        {
+          0xFE, 0xFE, 0xA2, 0xE0,
+          0x27, 0x19, 0x01,
+          0x03, 0x50, 0x01,
+          0xFD
+        },
+        Icom9700ScopeCommands.BuildReferenceLevel(
+          Icom9700ScopeReceiver.Sub,
+          -3.5));
+    }
+
+    [Fact]
+    public void ScopeFixedEdgeBuilderUsesFrequencyRangeAndBcdEdges()
+    {
+      Assert.Equal(
+        new byte[]
+        {
+          0xFE, 0xFE, 0xA2, 0xE0,
+          0x27, 0x1E, 0x02, 0x01,
+          0x00, 0x00, 0x50, 0x43, 0x00,
+          0x00, 0x00, 0x60, 0x43, 0x00,
+          0xFD
+        },
+        Icom9700ScopeCommands.BuildFixedEdge(
+          2,
+          1,
+          435_000_000,
+          436_000_000));
+    }
+
+    [Theory]
+    [InlineData(3_000)]
+    [InlineData(20_000)]
+    [InlineData(1_000_000)]
+    public void ScopeSpanBuilderRejectsUnsupportedSpan(
+      long spanHz)
+    {
+      Assert.Throws<ArgumentOutOfRangeException>(
+        () =>
+          Icom9700ScopeCommands.BuildSpan(
+            Icom9700ScopeReceiver.Main,
+            spanHz));
+    }
+
+    [Theory]
+    [InlineData(-20.5)]
+    [InlineData(20.5)]
+    [InlineData(1.2)]
+    public void ScopeReferenceBuilderRejectsInvalidLevel(
+      double referenceDb)
+    {
+      Assert.Throws<ArgumentOutOfRangeException>(
+        () =>
+          Icom9700ScopeCommands.BuildReferenceLevel(
+            Icom9700ScopeReceiver.Main,
+            referenceDb));
+    }
+
+    [Fact]
+    public void ScopeFixedEdgeRejectsSubKilohertzDigits()
+    {
+      Assert.Throws<ArgumentException>(
+        () =>
+          Icom9700ScopeCommands.BuildFixedEdge(
+            2,
+            1,
+            435_000_500,
+            436_000_000));
+    }
   }
 }
