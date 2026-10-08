@@ -248,6 +248,93 @@ namespace SkyCat.Tests
           436_000_000));
     }
 
+    [Fact]
+    public void ScopeReadQueryAndDecodersMatchCivFormat()
+    {
+      Assert.Equal(
+        new byte[]
+        {
+          0xFE, 0xFE, 0xA2, 0xE0,
+          0x27, 0x14, 0x00, 0xFD
+        },
+        Icom9700ScopeCommands.BuildQuery(
+          0x14,
+          0x00));
+
+      Assert.Equal(
+        435_600_000,
+        Icom9700ScopeCommands.DecodeFrequencyBcdLe(
+          new byte[]
+          {
+            0x00, 0x00, 0x60, 0x35, 0x04
+          }));
+
+      Assert.Equal(
+        -3.5,
+        Icom9700ScopeCommands.DecodeReferenceLevel(
+          new byte[]
+          {
+            0x03, 0x50, 0x01
+          }),
+        6);
+    }
+
+    [Fact]
+    public void ScopeSnapshotFormatsStableDaemonProtocol()
+    {
+      var snapshot =
+        new Icom9700ScopeSnapshot
+        {
+          SelectedScope =
+            Icom9700ScopeReceiver.Main,
+          MainMode =
+            Icom9700ScopeMode.Center,
+          MainSpanHz =
+            100_000,
+          MainEdge = 1,
+          MainReferenceDb = -3.5,
+          MainSpeed =
+            Icom9700ScopeSweepSpeed.Fast,
+          MainVbw =
+            Icom9700ScopeVbw.Wide,
+          SubMode =
+            Icom9700ScopeMode.ScrollFixed,
+          SubSpanHz =
+            50_000,
+          SubEdge = 2,
+          SubReferenceDb = 1.0,
+          SubSpeed =
+            Icom9700ScopeSweepSpeed.Mid,
+          SubVbw =
+            Icom9700ScopeVbw.Narrow,
+          ScopeDuringTx = true,
+          CenterType =
+            Icom9700ScopeCenterType.CarrierPointAbsolute,
+          MarkerPosition =
+            Icom9700ScopeMarkerPosition.CarrierPoint
+        };
+
+      Assert.Equal(
+        "SELECT=MAIN;" +
+        "MAIN.MODE=CENTER;" +
+        "MAIN.SPAN=100000;" +
+        "MAIN.EDGE=1;" +
+        "MAIN.REF=-3.5;" +
+        "MAIN.SPEED=FAST;" +
+        "MAIN.VBW=WIDE;" +
+        "SUB.MODE=SCROLL-F;" +
+        "SUB.SPAN=50000;" +
+        "SUB.EDGE=2;" +
+        "SUB.REF=1.0;" +
+        "SUB.SPEED=MID;" +
+        "SUB.VBW=NARROW;" +
+        "TX=1;" +
+        "CENTER=ABS;" +
+        "MARKER=CARRIER",
+        snapshot.ToProtocolString());
+    }
+
+
     [Theory]
     [InlineData(3_000)]
     [InlineData(20_000)]
