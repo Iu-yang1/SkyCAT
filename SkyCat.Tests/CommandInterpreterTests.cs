@@ -65,5 +65,28 @@ namespace SkyCat.Tests
     {
       Assert.Equal("RPRT -11", Make().Execute("C notanumber"));
     }
+
+    [Theory]
+    [InlineData("U SCOPE_STATE")]
+    [InlineData("U SCOPE_STATE 2")]
+    [InlineData("U SCOPE_MODE 0 4")]
+    [InlineData("U SCOPE_HOLD 0 2")]
+    [InlineData("U SCOPE_SPEED 0 3")]
+    public void MalformedScopeCommandsReturnMinusOne(
+      string command)
+    {
+      Assert.Equal(
+        "RPRT -1",
+        Make().Execute(command));
+    }
+
+    [Fact]
+    public void ScopeControlRejectsNonIcomRadioWithoutOpeningPort()
+    {
+      Assert.Equal(
+        "RPRT -6",
+        Make().Execute(
+          "U SCOPE_STATE 0"));
+    }
   }
 }

@@ -44,6 +44,7 @@ namespace skycatd
         "U" when args.Length == 3 && args[1] == "SCOPE_DATA" && args[2] == "1" => SendCommandIfAvailable(CatCommand.enable_scope_data),
         "U" when args.Length == 3 && args[1] == "SCOPE_DATA" && args[2] == "0" => SendCommandIfAvailable(CatCommand.disable_scope_data),
         "U" when args.Length == 3 && args[1] == "SCOPE_FAST" && args[2] == "1" => SetScopeFast(),
+        "U" when args.Length >= 3 && IsScopeControlCommand(args[1]) => IcomScope(args),
 
         // setup
         "S" when args.Length == 3 && args[1] == "0" => Setup(OperatingMode.Simplex),
@@ -80,6 +81,17 @@ namespace skycatd
     private string CmdT1(string value) => SendCommandIfAvailable(CatCommand.write_ptt_on, value);
     private string CmdC(int toneTenthsHz) => SendCommandIfAvailable(CatCommand.write_ctcss_tone, toneTenthsHz.ToString());
 
+    private static bool IsScopeControlCommand(
+      string command) =>
+      command is
+        "SCOPE_STATE" or
+        "SCOPE_MODE" or
+        "SCOPE_SPAN" or
+        "SCOPE_EDGE" or
+        "SCOPE_HOLD" or
+        "SCOPE_REF" or
+        "SCOPE_SPEED";
+
     private string SetScopeFast()
     {
       try
@@ -87,25 +99,149 @@ namespace skycatd
         CommandSender.SetIcomScopeSweepFast();
         return "RPRT 0";
       }
-      catch (InvalidReplyException ex)
+      catch (Exception ex)
       {
-        CommandSender.Log?.LogError($"Scope speed command rejected: {ex.Message}");
-        return "RPRT -9";
+        return ScopeException(
+          "Scope speed command",
+          ex);
       }
-      catch (TimeoutException ex)
+    }
+
+    private string IcomScope(string[] args)
+    {
+      if (args.Length < 3 ||
+          !byte.TryParse(
+            args[2],
+            out byte receiverByte) ||
+          receiverByte > 1)
+        return "RPRT -1";
+
+      var receiver =
+        (IcomScopeReceiver)receiverByte;
+
+      try
       {
-        CommandSender.Log?.LogError($"Scope speed command timed out: {ex.Message}");
-        return "RPRT -5";
-      }
-      catch (InvalidOperationException ex)
-      {
-        CommandSender.Log?.LogError($"Scope speed command failed: {ex.Message}");
-        return "RPRT -6";
+        switch (args[1])
+        {
+          case "SCOPE_STATE"
+            when args.Length == 3:
+          {
+            IcomScopeSettings state =
+              CommandSender.ReadIcomScopeSettings(
+                receiver);
+
+            return
+              $"{(byte)state.Mode} " +
+              $"{state.SpanHz} " +
+              $"{state.EdgeNumber} " +
+              $"{(state.Hold ? 1 : 0)} " +
+              $"{state.ReferenceLevelTenthsDb} " +
+              $"{(byte)state.SweepSpeed}";
+          }
+
+          case "SCOPE_MODE"
+            when args.Length == 4 &&
+                 byte.TryParse(
+                   args[3],
+                   out byte mode) &&
+                 mode <= 3:
+            CommandSender.SetIcomScopeMode(
+              receiver,
+              (IcomScopeMode)mode);
+            return "RPRT 0";
+
+          case "SCOPE_SPAN"
+            when args.Length == 4 &&
+                 long.TryParse(
+                   args[3],
+                   out long span):
+            CommandSender.SetIcomScopeSpan(
+              receiver,
+              span);
+            return "RPRT 0";
+
+          case "SCOPE_EDGE"
+            when args.Length == 4 &&
+                 int.TryParse(
+                   args[3],
+                   out int edge):
+            CommandSender.SetIcomScopeEdge(
+              receiver,
+              edge);
+            return "RPRT 0";
+
+          case "SCOPE_HOLD"
+            when args.Length == 4 &&
+                 args[3] is "0" or "1":
+            CommandSender.SetIcomScopeHold(
+              receiver,
+              args[3] == "1");
+            return "RPRT 0";
+
+          case "SCOPE_REF"
+            when args.Length == 4 &&
+                 int.TryParse(
+                   args[3],
+                   out int reference):
+            CommandSender.SetIcomScopeReferenceLevel(
+              receiver,
+              reference);
+            return "RPRT 0";
+
+          case "SCOPE_SPEED"
+            when args.Length == 4 &&
+                 byte.TryParse(
+                   args[3],
+                   out byte speed) &&
+                 speed <= 2:
+            CommandSender.SetIcomScopeSweepSpeed(
+              receiver,
+              (IcomScopeSweepSpeed)speed);
+            return "RPRT 0";
+
+          default:
+            return "RPRT -1";
+        }
       }
       catch (Exception ex)
       {
-        CommandSender.Log?.LogError(ex, "Scope speed command failed.");
-        return "RPRT -7";
+        return ScopeException(
+          args[1],
+          ex);
+      }
+    }
+
+    private string ScopeException(
+      string operation,
+      Exception ex)
+    {
+      switch (ex)
+      {
+        case ArgumentException:
+          CommandSender.Log?.LogError(
+            $"{operation} failed: {ex.Message}");
+          return "RPRT -1";
+
+        case TimeoutException:
+          CommandSender.Log?.LogError(
+            $"{operation} timed out: {ex.Message}");
+          return "RPRT -5";
+
+        case InvalidOperationException:
+          CommandSender.Log?.LogError(
+            $"{operation} failed: {ex.Message}");
+          return "RPRT -6";
+
+        case InvalidReplyException:
+          CommandSender.Log?.LogError(
+            $"{operation} rejected: {ex.Message}");
+          return "RPRT -9";
+
+        default:
+          CommandSender.Log?.LogError(
+            ex,
+            $"{operation} failed.");
+          return "RPRT -7";
       }
     }
 

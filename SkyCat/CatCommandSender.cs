@@ -157,40 +157,267 @@ namespace SkyCat
 
     public void SetIcomScopeSweepFast()
     {
+      SetIcomScopeSweepSpeed(
+        IcomScopeReceiver.Main,
+        IcomScopeSweepSpeed.Fast);
+      SetIcomScopeSweepSpeed(
+        IcomScopeReceiver.Sub,
+        IcomScopeSweepSpeed.Fast);
+    }
+
+    public IcomScopeSettings ReadIcomScopeSettings(
+      IcomScopeReceiver receiver)
+    {
+      EnsureIcomScopeAvailable();
+
+      IcomScopeMode mode =
+        IcomScopeProtocol.DecodeMode(
+          QueryIcomScope(
+            receiver,
+            IcomScopeProtocol.ModeSubcommand,
+            1));
+
+      long span =
+        IcomScopeProtocol.DecodeSpan(
+          QueryIcomScope(
+            receiver,
+            IcomScopeProtocol.SpanSubcommand,
+            5));
+
+      int edge =
+        IcomScopeProtocol.DecodeEdge(
+          QueryIcomScope(
+            receiver,
+            IcomScopeProtocol.EdgeSubcommand,
+            1));
+
+      bool hold =
+        IcomScopeProtocol.DecodeHold(
+          QueryIcomScope(
+            receiver,
+            IcomScopeProtocol.HoldSubcommand,
+            1));
+
+      int reference =
+        IcomScopeProtocol.DecodeReferenceLevel(
+          QueryIcomScope(
+            receiver,
+            IcomScopeProtocol.ReferenceSubcommand,
+            3));
+
+      IcomScopeSweepSpeed speed =
+        IcomScopeProtocol.DecodeSpeed(
+          QueryIcomScope(
+            receiver,
+            IcomScopeProtocol.SpeedSubcommand,
+            1));
+
+      return new IcomScopeSettings(
+        receiver,
+        mode,
+        span,
+        edge,
+        hold,
+        reference,
+        speed);
+    }
+
+    public void SetIcomScopeMode(
+      IcomScopeReceiver receiver,
+      IcomScopeMode mode) =>
+      WriteIcomScope(
+        receiver,
+        IcomScopeProtocol.ModeSubcommand,
+        IcomScopeProtocol.EncodeMode(mode),
+        "scope mode");
+
+    public void SetIcomScopeSpan(
+      IcomScopeReceiver receiver,
+      long spanHz) =>
+      WriteIcomScope(
+        receiver,
+        IcomScopeProtocol.SpanSubcommand,
+        IcomScopeProtocol.EncodeSpan(spanHz),
+        "scope span");
+
+    public void SetIcomScopeEdge(
+      IcomScopeReceiver receiver,
+      int edgeNumber) =>
+      WriteIcomScope(
+        receiver,
+        IcomScopeProtocol.EdgeSubcommand,
+        IcomScopeProtocol.EncodeEdge(edgeNumber),
+        "scope edge");
+
+    public void SetIcomScopeHold(
+      IcomScopeReceiver receiver,
+      bool hold) =>
+      WriteIcomScope(
+        receiver,
+        IcomScopeProtocol.HoldSubcommand,
+        IcomScopeProtocol.EncodeHold(hold),
+        "scope hold");
+
+    public void SetIcomScopeReferenceLevel(
+      IcomScopeReceiver receiver,
+      int tenthsDb) =>
+      WriteIcomScope(
+        receiver,
+        IcomScopeProtocol.ReferenceSubcommand,
+        IcomScopeProtocol.EncodeReferenceLevel(tenthsDb),
+        "scope reference level");
+
+    public void SetIcomScopeSweepSpeed(
+      IcomScopeReceiver receiver,
+      IcomScopeSweepSpeed speed) =>
+      WriteIcomScope(
+        receiver,
+        IcomScopeProtocol.SpeedSubcommand,
+        IcomScopeProtocol.EncodeSpeed(speed),
+        "scope sweep speed");
+
+    private void EnsureIcomScopeAvailable()
+    {
       if (!SerialPort.IsOpen)
-        throw new InvalidOperationException("Serial port is not open");
-
-      if (!string.Equals(RadioName, "IC-9700", StringComparison.OrdinalIgnoreCase))
         throw new InvalidOperationException(
-          $"Scope sweep speed control is only implemented for IC-9700, current radio is '{RadioName}'.");
+          "Serial port is not open");
 
-      // IC-9700 CI-V 27 1A:
-      // receiver 00=MAIN / 01=SUB, speed 00=FAST / 01=MID / 02=SLOW.
-      // Configure both scopes so Auto/MAIN/SUB selection in SkyRoof never inherits
-      // a slow front-panel setting left behind by a previous RS-BA1 session.
-      foreach (byte receiver in new byte[] { 0x00, 0x01 })
-      {
-        var message = new CatMessage
+      if (!string.Equals(
+            RadioName,
+            "IC-9700",
+            StringComparison.OrdinalIgnoreCase))
+        throw new InvalidOperationException(
+          $"IC-9700 scope control is unavailable for radio '{RadioName}'.");
+    }
+
+    private void WriteIcomScope(
+      IcomScopeReceiver receiver,
+      byte subcommand,
+      byte[] value,
+      string description)
+    {
+      EnsureIcomScopeAvailable();
+
+      byte[] command =
+        IcomScopeProtocol.BuildSet(
+          receiver,
+          subcommand,
+          value);
+
+      byte[] ack =
+        IcomScopeProtocol.BuildAckPattern();
+
+      var message =
+        new CatMessage
         {
-          Command = new byte?[]
-          {
-            0xFE, 0xFE, 0xA2, 0xE0,
-            0x27, 0x1A, receiver, 0x00,
-            0xFD
-          },
-          Reply = new byte?[]
-          {
-            0xFE, 0xFE, 0xE0, 0xA2, 0xFB, 0xFD
-          },
+          Command =
+            command
+              .Select(
+                b => (byte?)b)
+              .ToArray(),
+          Reply =
+            ack
+              .Select(
+                b => (byte?)b)
+              .ToArray(),
           Comment =
-            receiver == 0
-              ? "MAIN scope sweep speed FAST"
-              : "SUB scope sweep speed FAST"
+            $"{receiver} {description}"
         };
 
-        _ = SendMessage(message);
-      }
+      _ = SendMessage(message);
     }
+
+    private byte[] QueryIcomScope(
+      IcomScopeReceiver receiver,
+      byte subcommand,
+      int valueLength)
+    {
+      EnsureIcomScopeAvailable();
+
+      byte[] command =
+        IcomScopeProtocol.BuildQuery(
+          receiver,
+          subcommand);
+
+      DumpUnexpectedBytes();
+
+      Log?.LogTrace(
+        $"  Sending IC-9700 scope query: {BitConverter.ToString(command)}");
+
+      SerialPort.Write(
+        command,
+        0,
+        command.Length);
+
+      SkipEcho(command);
+
+      const int totalTimeoutMs = 1500;
+      long deadline =
+        Environment.TickCount64 +
+        totalTimeoutMs;
+
+      int ignoredFrames = 0;
+      int ignoredScopeFrames = 0;
+      byte[]? lastUnexpected = null;
+
+      while (Environment.TickCount64 < deadline)
+      {
+        int remaining =
+          (int)Math.Max(
+            1,
+            deadline -
+            Environment.TickCount64);
+
+        byte[]? frame =
+          ReceiveCivFrame(remaining);
+
+        if (frame == null)
+          break;
+
+        if (CommandSet!.BadReply != null &&
+            BytesMatch(
+              frame,
+              CommandSet.BadReply))
+          throw new InvalidReplyException(
+            "Command rejected by the radio");
+
+        if (IcomScopeProtocol.TryExtractQueryReply(
+              frame,
+              receiver,
+              subcommand,
+              valueLength,
+              out byte[] value))
+        {
+          Log?.LogTrace(
+            $"  IC-9700 scope reply: {BitConverter.ToString(frame)}");
+          return value;
+        }
+
+        ignoredFrames++;
+        lastUnexpected = frame;
+
+        if (IsScopeWaveformFrame(frame))
+        {
+          ignoredScopeFrames++;
+          continue;
+        }
+
+        Log?.LogTrace(
+          $"  Ignoring unsolicited CI-V frame while waiting for scope reply: " +
+          $"{BitConverter.ToString(frame)}");
+      }
+
+      string detail =
+        lastUnexpected == null
+          ? "no complete CI-V frame received"
+          : $"last unrelated frame {BitConverter.ToString(lastUnexpected)}";
+
+      throw new TimeoutException(
+        $"Timed out waiting for IC-9700 scope 27 {subcommand:X2} " +
+        $"{receiver}; ignored {ignoredFrames} unsolicited CI-V frame(s) " +
+        $"({ignoredScopeFrames} scope), {detail}.");
+    }
+
 
 
     //----------------------------------------------------------------------------------------------
