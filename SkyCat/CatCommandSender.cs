@@ -250,6 +250,60 @@ namespace SkyCat
           upperHz),
         $"scope fixed edge range {frequencyRange} edge {edgeNumber}: {lowerHz}-{upperHz} Hz");
 
+    public Icom9700FixedEdgeSnapshot ReadIcomScopeFixedEdge(
+      int frequencyRange,
+      int edgeNumber)
+    {
+      // The pure query builder performs range/edge validation.
+      byte[] query =
+        Icom9700ScopeCommands.BuildFixedEdgeQuery(
+          frequencyRange,
+          edgeNumber);
+
+      _ = query;
+
+      byte[] data =
+        ReadIcom9700ScopeData(
+          0x1E,
+          (byte)frequencyRange,
+          (byte)edgeNumber);
+
+      if (data.Length < 12 ||
+          data[0] !=
+            (byte)frequencyRange ||
+          data[1] !=
+            (byte)edgeNumber)
+        throw new FormatException(
+          "Invalid IC-9700 fixed-edge readback.");
+
+      long lowerHz =
+        Icom9700ScopeCommands.DecodeFrequencyBcdLe(
+          data.AsSpan(
+            2,
+            5));
+      long upperHz =
+        Icom9700ScopeCommands.DecodeFrequencyBcdLe(
+          data.AsSpan(
+            7,
+            5));
+
+      if (upperHz <= lowerHz)
+        throw new FormatException(
+          "IC-9700 returned an invalid fixed-edge range.");
+
+      return new Icom9700FixedEdgeSnapshot
+      {
+        FrequencyRange =
+          frequencyRange,
+        EdgeNumber =
+          edgeNumber,
+        LowerHz =
+          lowerHz,
+        UpperHz =
+          upperHz
+      };
+    }
+
     public Icom9700ScopeSnapshot ReadIcomScopeSnapshot()
     {
       byte[] selected =
