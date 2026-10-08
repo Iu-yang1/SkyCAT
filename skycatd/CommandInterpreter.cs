@@ -44,7 +44,7 @@ namespace skycatd
         "U" when args.Length == 3 && args[1] == "SCOPE_DATA" && args[2] == "1" => SendCommandIfAvailable(CatCommand.enable_scope_data),
         "U" when args.Length == 3 && args[1] == "SCOPE_DATA" && args[2] == "0" => SendCommandIfAvailable(CatCommand.disable_scope_data),
         "U" when args.Length == 3 && args[1] == "SCOPE_FAST" && args[2] == "1" => SetScopeFast(),
-        "U" when args.Length >= 3 && IsScopeControlCommand(args[1]) => IcomScope(args),
+        "U" when args.Length >= 2 && IsScopeControlCommand(args[1]) => IcomScope(args),
 
         // setup
         "S" when args.Length == 3 && args[1] == "0" => Setup(OperatingMode.Simplex),
