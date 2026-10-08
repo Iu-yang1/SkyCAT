@@ -230,15 +230,6 @@ namespace SkyCat
           vbw),
         $"scope {receiver} VBW {vbw}");
 
-    public void SetIcomScopeRbw(
-      Icom9700ScopeReceiver receiver,
-      Icom9700ScopeRbw rbw) =>
-      SendIcom9700ScopeCommand(
-        Icom9700ScopeCommands.BuildRbw(
-          receiver,
-          rbw),
-        $"scope {receiver} RBW {rbw}");
-
     public void SetIcomScopeMarkerPosition(
       Icom9700ScopeMarkerPosition position) =>
       SendIcom9700ScopeCommand(
@@ -343,10 +334,6 @@ namespace SkyCat
         ReadIcom9700ScopeData(
           0x1D,
           (byte)Icom9700ScopeReceiver.Main);
-      byte[] mainRbw =
-        ReadIcom9700ScopeData(
-          0x1F,
-          (byte)Icom9700ScopeReceiver.Main);
 
       byte[] subMode =
         ReadIcom9700ScopeData(
@@ -371,10 +358,6 @@ namespace SkyCat
       byte[] subVbw =
         ReadIcom9700ScopeData(
           0x1D,
-          (byte)Icom9700ScopeReceiver.Sub);
-      byte[] subRbw =
-        ReadIcom9700ScopeData(
-          0x1F,
           (byte)Icom9700ScopeReceiver.Sub);
 
       byte[] duringTx =
@@ -425,11 +408,6 @@ namespace SkyCat
             mainVbw,
             Icom9700ScopeReceiver.Main,
             "MAIN VBW"),
-        MainRbw =
-          ParseScopedEnum<Icom9700ScopeRbw>(
-            mainRbw,
-            Icom9700ScopeReceiver.Main,
-            "MAIN RBW"),
 
         SubMode =
           ParseScopedEnum<Icom9700ScopeMode>(
@@ -461,11 +439,6 @@ namespace SkyCat
             subVbw,
             Icom9700ScopeReceiver.Sub,
             "SUB VBW"),
-        SubRbw =
-          ParseScopedEnum<Icom9700ScopeRbw>(
-            subRbw,
-            Icom9700ScopeReceiver.Sub,
-            "SUB RBW"),
 
         ScopeDuringTx =
           ParseBooleanByte(
