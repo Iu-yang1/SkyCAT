@@ -88,6 +88,47 @@ public sealed class IcomScopeCommandsTests
   }
 
   [Fact]
+  public void ScopeQueryMatcherSkipsUnsolicitedWaterfallAndWrongReceiver()
+  {
+    byte[] waveform = new byte[] {
+      0xFE, 0xFE, 0xE0, 0xA2, 0x27, 0x00, 0x00, 0x01, 0x01, 0xFD
+    };
+    byte[] wrongScope = new byte[] {
+      0xFE, 0xFE, 0xE0, 0xA2, 0x27, 0x1A, 0x01, 0x02, 0xFD
+    };
+    byte[] selected = new byte[] {
+      0xFE, 0xFE, 0xE0, 0xA2, 0x27, 0x1A, 0x00, 0x02, 0xFD
+    };
+    Assert.False(IcomScopeCivCodec.TryExtractQueryReply(
+      waveform, 0x1A, new byte[] { 0x00 }, 1, out _));
+    Assert.False(IcomScopeCivCodec.TryExtractQueryReply(
+      wrongScope, 0x1A, new byte[] { 0x00 }, 1, out _));
+    Assert.True(IcomScopeCivCodec.TryExtractQueryReply(
+      selected, 0x1A, new byte[] { 0x00 }, 1, out byte[] reply));
+    Assert.Equal(new byte[] { 0x02 }, reply);
+  }
+
+  [Fact]
+  public void ScopeQueryMatcherRejectsStrayControllerAddressAndTruncatedReply()
+  {
+    byte[] frame = new byte[] {
+      0xFE, 0xFE, 0xE0, 0xA2, 0x27, 0x15,
+      0x00, 0x00, 0x50, 0x02, 0x00, 0x00, 0xFD
+    };
+    Assert.True(IcomScopeCivCodec.TryExtractQueryReply(
+      frame, 0x15, new byte[] { 0x00 }, 5, out byte[] value));
+    Assert.Equal(25000, IcomScopeCivCodec.DecodeSpan(value));
+
+    frame[3] = 0xA4;
+    Assert.False(IcomScopeCivCodec.TryExtractQueryReply(
+      frame, 0x15, new byte[] { 0x00 }, 5, out _));
+    frame[3] = 0xA2;
+    Assert.False(IcomScopeCivCodec.TryExtractQueryReply(
+      frame.AsSpan(0, frame.Length - 1), 0x15,
+      new byte[] { 0x00 }, 5, out _));
+  }
+
+  [Fact]
   public void ValidScopeCommandsNowDispatchBeyondOldUnsupportedReturn()
   {
     var interpreter = new CommandInterpreter(
