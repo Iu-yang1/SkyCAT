@@ -1080,9 +1080,16 @@ namespace SkyCat
     private string FormatNumber(string value, ParamInfo param, int digitCount)
     {
       if (string.IsNullOrWhiteSpace(value)) throw new ArgumentException("Number cannot be null or empty.", nameof(value));
-      if (!long.TryParse(value, out long numericValue)) throw new ArgumentException($"Invalid number format '{value}'.", nameof(value));
+      if (!long.TryParse(value, System.Globalization.NumberStyles.None,
+            System.Globalization.CultureInfo.InvariantCulture, out long numericValue))
+        throw new ArgumentException($"Invalid nonnegative number '{value}'.", nameof(value));
 
-      if (param.Step.HasValue) numericValue = (long)(numericValue / param.Step.Value);
+      if (param.Step.HasValue)
+      {
+        if (!double.IsFinite(param.Step.Value) || param.Step.Value <= 0)
+          throw new ArgumentException("Invalid radio command frequency step.");
+        numericValue = checked((long)(numericValue / param.Step.Value));
+      }
 
       value = numericValue.ToString($"D{digitCount}");
       if (value.Length > digitCount) throw new ArgumentException($"Number {value} has more than {digitCount} digits.");
