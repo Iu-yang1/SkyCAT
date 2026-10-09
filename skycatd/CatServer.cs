@@ -25,6 +25,7 @@ namespace skycatd
     private readonly SerialPort serialPort;
     private readonly object commandLock = new();
     private readonly PttLeaseManager pttLease;
+    private readonly CwMessageLeaseManager cwLease;
     private Task? ScopeDrainTask;
 
     private PortStatus ComStatus;
@@ -46,6 +47,7 @@ namespace skycatd
       commandSender = commandInterpreter.CommandSender;
       serialPort = commandSender.SerialPort;
       pttLease = new PttLeaseManager(commandInterpreter.Execute);
+      cwLease = new CwMessageLeaseManager(commandInterpreter.Execute);
 
       scopeStreamServer = new ScopeStreamServer(options.ScopePort, logger);
       commandSender.ScopeFrameReceived += scopeStreamServer.Publish;
@@ -63,8 +65,25 @@ namespace skycatd
         serverName: "CAT",
         clientSessionFactory: () =>
         {
-          var session = new PttCommandSession(commandInterpreter.Execute, logger, "CAT", pttLease);
-          return new TcpClientSession(session.Execute, session.EnsurePttOff);
+          var pttSession =
+            new PttCommandSession(
+              commandInterpreter.Execute,
+              logger,
+              "CAT",
+              pttLease);
+          var cwSession =
+            new CwMessageCommandSession(
+              pttSession.Execute,
+              cwLease);
+
+          return new TcpClientSession(
+            cwSession.Execute,
+            () =>
+            {
+              // Stop the internal keyer before changing PTT ownership.
+              cwSession.EnsureCwAbort();
+              pttSession.EnsurePttOff();
+            });
         });
 
       // Separate loopback socket, sharing the original serial transaction lock.
@@ -213,7 +232,12 @@ namespace skycatd
 
             logger.LogInformation("Serial port opened.");
             lock (commandLock)
+            {
+              // Recover any ambiguous TX resources before allowing a new
+              // client to acquire them after the serial link returns.
+              cwLease.RetryUncertainRelease();
               pttLease.RetryUncertainRelease();
+            }
           }
           catch (Exception ex)
           {
@@ -305,6 +329,10 @@ namespace skycatd
       wsjtXTcpServer?.Stop();
       switchTcpServer?.Stop();
       tcpServer.Stop();
+
+      lock (commandLock)
+        cwLease.RetryUncertainRelease();
+
       ReleasePttBeforeShutdown();
 
       scopeStreamServer.Stop();
