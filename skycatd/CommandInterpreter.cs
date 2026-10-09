@@ -49,6 +49,12 @@ namespace skycatd
           ReadIcomRfGain(),
         "U" when args.Length == 3 && args[1] == "RF_GAIN" =>
           WriteIcomRfGain(args[2]),
+        "U" when args.Length == 2 && args[1] == "CW_CAPS" =>
+          GetCwCapabilities(),
+        "U" when args.Length == 3 && args[1] == "CW_SEND64" =>
+          SendCwMessage(args[2]),
+        "U" when args.Length == 2 && args[1] == "CW_ABORT" =>
+          AbortCwMessage(),
         // SkyRoof's full spectrum-control protocol. The former interpreter
         // rejected all of these with RPRT -11, leaving controls waiting for
         // SCOPE_READ forever even though the waveform stream was live.
@@ -90,6 +96,96 @@ namespace skycatd
     private string CmdT0(string value) => SendCommandIfAvailable(CatCommand.write_ptt_off, value);
     private string CmdT1(string value) => SendCommandIfAvailable(CatCommand.write_ptt_on, value);
     private string CmdC(int toneTenthsHz) => SendCommandIfAvailable(CatCommand.write_ctcss_tone, toneTenthsHz.ToString());
+
+    private string GetCwCapabilities()
+    {
+      if (!string.Equals(
+            CommandSender.RadioName,
+            "IC-9700",
+            StringComparison.OrdinalIgnoreCase))
+        return "RPRT -11";
+
+      return
+        "{\"version\":1," +
+        "\"model\":\"IC-9700\"," +
+        "\"max_chars\":" +
+        IcomCwMessageCodec.MaxCharacters +
+        "," +
+        "\"encoding\":\"base64-ascii\"," +
+        "\"abort\":true}";
+    }
+
+    private string SendCwMessage(
+      string encodedPayload)
+    {
+      if (!string.Equals(
+            CommandSender.RadioName,
+            "IC-9700",
+            StringComparison.OrdinalIgnoreCase))
+        return "RPRT -11";
+
+      try
+      {
+        string text =
+          IcomCwMessageCodec
+            .DecodeBase64Payload(
+              encodedPayload);
+
+        CommandSender.SendIcomCwMessage(
+          text);
+        return "RPRT 0";
+      }
+      catch (Exception ex)
+      {
+        return FormatCwError(ex);
+      }
+    }
+
+    private string AbortCwMessage()
+    {
+      if (!string.Equals(
+            CommandSender.RadioName,
+            "IC-9700",
+            StringComparison.OrdinalIgnoreCase))
+        return "RPRT -11";
+
+      try
+      {
+        CommandSender
+          .AbortIcomCwMessage();
+        return "RPRT 0";
+      }
+      catch (Exception ex)
+      {
+        return FormatCwError(ex);
+      }
+    }
+
+    private string FormatCwError(
+      Exception ex)
+    {
+      CommandSender.Log?.LogWarning(
+        "IC-9700 CW message CAT operation failed: {Error}",
+        ex.Message);
+
+      return ex switch
+      {
+        NotSupportedException =>
+          "RPRT -11",
+        ArgumentException =>
+          "RPRT -1",
+        TimeoutException =>
+          "RPRT -5",
+        InvalidOperationException =>
+          "RPRT -6",
+        InvalidReplyException or
+          FormatException =>
+          "RPRT -9",
+        _ =>
+          "RPRT -7"
+      };
+    }
+
 
     private string ReadIcomRfGain()
     {
