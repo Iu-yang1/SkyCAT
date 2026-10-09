@@ -13,6 +13,30 @@ namespace SkyCat
     private static readonly HashSet<long> ValidSpans =
       new() { 2500, 5000, 10000, 25000, 50000, 100000, 250000, 500000 };
 
+    // Match complete addressed scope query replies, never arbitrary 27 00
+    // waveform frames or transceive data. The selector byte(s) must be
+    // echoed by the radio. A malformed response is not a valid readback.
+    public static bool TryExtractQueryReply(
+      ReadOnlySpan<byte> frame,
+      byte subcommand,
+      ReadOnlySpan<byte> selectors,
+      int expectedValueBytes,
+      out byte[] value)
+    {
+      value = Array.Empty<byte>();
+      if (expectedValueBytes < 1 || expectedValueBytes > 32 ||
+          frame.Length != 7 + selectors.Length + expectedValueBytes ||
+          frame[0] != 0xFE || frame[1] != 0xFE ||
+          frame[2] != 0xE0 || frame[3] != 0xA2 ||
+          frame[4] != 0x27 || frame[5] != subcommand ||
+          frame[^1] != 0xFD ||
+          !frame.Slice(6, selectors.Length).SequenceEqual(selectors))
+        return false;
+
+      value = frame.Slice(6 + selectors.Length, expectedValueBytes).ToArray();
+      return true;
+    }
+
     public static byte[] EncodeFrequency(long hz)
     {
       if (hz < 0 || hz > 9_999_999_999)
