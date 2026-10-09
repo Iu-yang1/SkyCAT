@@ -20,7 +20,18 @@ SkyCAT 与现有 CAT 引擎（例如 [OmniRig](https://dxatlas.com/OmniRig/)、[
 - 与 OmniRig 类似，它采用开放式架构，可以通过编写文本形式的电台命令集文件来增加新机型支持；
 - 与 FLRig 类似，它不会持续轮询电台。客户端在需要读取频率、模式等状态时显式发起请求，因此控制过程更直接、响应更快。
 
-当前 fork 还增加了 SkyRoof / IC-9700 场景所需的 WSJT-X 兼容代理、CTCSS、PTT fail-safe 和原生 IC-9700 频谱流等功能。
+当前 fork 还增加了 SkyRoof / IC-9700 场景所需的 WSJT-X 兼容代理、CTCSS、
+PTT fail-safe、原生 IC-9700 频谱流，以及 **Remote Control Switch 独立辅助端口 4537**。
+这些功能不一定存在于上游 VE3NEA 的发布版本中。
+
+### RS-BA1 / SkyRoof / Remote Control Switch 并行使用
+
+默认端口分别是 CAT **4532**、WSJT-X **4534**、频谱 **4535**、
+Switch 辅助控制 **4537**。所有服务共享 SkyCAT 的串口链路，
+Switch 端口不允许修改卫星频率、PTT 或 VFO，避免与 SkyRoof 冲突。
+
+完整配置、Windows 端口占用排查与 CI-V 指令列表见
+[skycatd 中文使用文档](skycatd.md#ic-9700-remote-control-switch-集成)。
 
 ## 工作模式
 

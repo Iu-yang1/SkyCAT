@@ -10,10 +10,11 @@ nav_order: 3
 
 **skycatd.exe** 是一个基于 SkyCAT 类库的命令行程序。它通过串口连接电台，并通过 TCP 向客户端提供 CAT 控制接口。
 
-当前 fork 还提供两个仅监听本机回环地址的附加服务：
+当前 fork 还提供三个仅监听本机回环地址的附加服务：
 
 - 面向 WSJT-X 的受限 Hamlib NET rigctl 兼容代理；
-- 面向 SkyRoof 的 IC-9700 原生二进制频谱帧流。
+- 面向 SkyRoof 的 IC-9700 原生二进制频谱帧流；
+- 面向 IC-9700 Remote Control Switch 的受限辅助控制接口。
 
 ## 安装
 
@@ -64,6 +65,7 @@ skycatd.exe -m IC-9700 -r COM9 -s 115200
 | SkyCAT 主 CAT 服务 | `127.0.0.1` | 4532 |
 | WSJT-X 兼容代理 | `127.0.0.1` | 4534 |
 | IC-9700 频谱流 | `127.0.0.1` | 4535 |
+| Remote Control Switch 辅助控制 | `127.0.0.1` | 4537 |
 
 主 CAT 服务默认只允许本机连接。只有显式使用 `--allow-remote` 时，它才会监听所有网络接口。
 
@@ -169,7 +171,7 @@ skycatd.exe -m IC-9700 -r COM9 --allow-remote
 0.0.0.0:4532
 ```
 
-这个参数**只影响主 CAT 服务**。WSJT-X 代理和 Scope stream 仍然只监听 `127.0.0.1`。
+这个参数**只影响主 CAT 服务**。WSJT-X 代理、Scope stream 和 Switch 专用端口仍然只监听 `127.0.0.1`。
 
 > 主 CAT TCP 协议本身不提供 TLS 或用户认证。不要直接把它暴露到公网。远程控制应使用受信任局域网、防火墙规则、VPN 或受保护的隧道。
 
@@ -219,6 +221,27 @@ Scope server 始终只监听 `127.0.0.1`。
 2. 对应长度的原始 CI-V frame。
 
 该端口是**二进制数据端口**，不能当成普通 CAT 或 rigctl 文本端口使用。
+
+### `--switch-port <port>`
+
+可选，默认值：**4537**。
+
+设置只在 IC-9700 型号下启动的 Remote Control Switch 专用 TCP 端口，
+仅监听本机 `127.0.0.1`。此端口不是普通 rigctl，也不接受原始 CI-V 透传。
+
+```powershell
+skycatd.exe -m IC-9700 -r COM9 --switch-port 4537
+```
+
+如果被其他程序占用，可指定一个空闲端口，但需要同时修改
+Remote Control Switch 中保存的 TCP 地址。
+
+### `--no-switch-port`
+
+可选，默认：**关闭**。
+
+关闭 Switch 辅助端口；主 CAT、WSJT-X 和频谱服务不受影响
+（它们仍分别受自身参数控制）。
 
 ### `-v, --verbose`
 
@@ -302,11 +325,15 @@ skycatd.exe --version
 
 所有 TCP 端口必须在 **1-65535** 范围内。
 
-当 WSJT-X proxy 启用时，下列三个端口必须互不相同：
+所有**已启用的服务**必须使用不同的端口：
 
 - 主 CAT：`--port`；
-- WSJT-X proxy：`--wsjtx-port`；
-- Scope stream：`--scope-port`。
+- WSJT-X proxy：`--wsjtx-port`（未禁用时）；
+- Scope stream：`--scope-port`；
+- Switch 辅助服务：`--switch-port`（未禁用时）。
+
+SkyCAT 可以检测自己配置的端口冲突，但**无法预留已被其他 Windows
+进程监听的端口**。
 
 例如以下配置无效：
 
@@ -314,7 +341,8 @@ skycatd.exe --version
 skycatd.exe -m IC-9700 -r COM9 -t 4534 --wsjtx-port 4534
 ```
 
-如果使用 `--no-wsjtx-proxy`，WSJT-X 端口不再参与冲突检查；但主 CAT 端口与 Scope 端口仍然必须不同。
+禁用某个可选服务后，其端口不再参与冲突检查。主 CAT 与 Scope
+端口始终需要不同；启用 Switch 时，Switch 端口也必须与其余已启用端口不同。
 
 ## 当前支持的电台
 
@@ -361,6 +389,7 @@ skycatd.exe -m IC-9700 -r COM9
 SkyRoof CAT:     127.0.0.1:4532
 WSJT-X proxy:    127.0.0.1:4534
 Scope stream:    127.0.0.1:4535
+Switch auxiliary: 127.0.0.1:4537
 ```
 
 如果电台使用其他 COM 口，例如 COM12：
@@ -399,16 +428,19 @@ skycatd.exe -m IC-9700 -r COM9 --allow-remote
 
 如果 Windows Firewall 弹出提示，只应放行实际需要使用的网络配置文件。
 
-WSJT-X 和 Scope 端口仍然只对运行 skycatd 的本机开放。
+WSJT-X、Scope 和 Switch 端口仍然只对运行 skycatd 的本机开放。
 
-### 自定义三个 TCP 端口
+### 自定义四个 TCP 端口
 
 ```bash
 skycatd.exe -m IC-9700 -r COM9 \
   --port 4600 \
   --wsjtx-port 4601 \
-  --scope-port 4602
+  --scope-port 4602 \
+  --switch-port 4603
 ```
+
+客户端地址也应按照上述端口同步修改。
 
 ### 禁用 WSJT-X
 
@@ -512,7 +544,7 @@ S 0 VFOB
 
 ### SkyRoof 频谱控制握手
 
-频谱数据流（TCP 4535）和普通 CAT 命令端口（默认 4534）相互独立。SkyRoof 的
+频谱数据流（TCP 4535）和普通 CAT 命令端口（默认 4532）相互独立。SkyRoof 的
 `Scope control path = SkyCAT` 必须连接 SkyCAT 普通 CAT 服务；启动时须指定
 `--model IC-9700`，并保持串口 CI-V 通路连接。切换频谱数据来源并不等于切换控制通道。
 
@@ -576,35 +608,121 @@ SkyCAT 从共享串口 CI-V 数据流中提取完整的 IC-9700 `27 00` waveform
 ## 注意事项
 
 - 主 CAT 服务默认仅监听 loopback；
-- `--allow-remote` 不会暴露 WSJT-X 和 Scope listener；
+- `--allow-remote` 不会暴露 WSJT-X、Scope 或 Switch listener；
 - `--model` 决定可用 CAT 命令和默认串口速率；
 - Duplex、Split、Simplex 下可用的命令可能不同；
 - 客户端不应假设所有电台都支持所有 CAT 命令；
-- 使用 IC-9700 + SkyRoof 时，通常保持默认 4532 / 4534 / 4535 即可。
+- 使用 IC-9700 + SkyRoof 时，通常保持 CAT 4532 / WSJT-X 4534 / 频谱 4535；需要 Remote Control Switch 时再使用辅助端口 4537。
 
 
-### IC-9700 Remote Control Switch 专用 TCP 端口
+## IC-9700 Remote Control Switch 集成
 
-SkyCAT 为 Remote Control Switch 新增仅监听本机的
-`127.0.0.1:4537` TCP 接口。通过 `--switch-port` 修改端口；
-通过 `--no-switch-port` 关闭。仅在电台型号为 IC-9700 时启动，
-并禁止与 CAT/WSJT-X/频谱端口重号。
+[IC-9700 Remote Control Switch fork](https://github.com/Iu-yang1/IC-9700-Remote-Control-Switch)
+支持可选的 **SkyCAT TCP** 连接方式，默认使用
+**`127.0.0.1:4537`**。这个端口仅在 SkyCAT 使用 `IC-9700`
+型号时启动；其他电台型号不会创建它。
 
-可以先发送不访问电台的 `PING`，服务直接返回 `PONG`，
-避免在连接握手阶段等待串口应答。
+### 同时使用 RS-BA1、SkyRoof 与 Remote Control Switch
 
-协议为逐行 ASCII：`GET DATA_OFF` 返回 `VALUE 05`；
-`SET DATA_OFF 05` 成功返回 `OK`。其他允许的名称包括
-`DATA_MOD`、`USB_OUTPUT`、`COMP`、`COMP_LEVEL`、
-`KEY_SPEED`、`RF_POWER`；`SAT_MODE` **只允许读取**。
+1. 通过 **RS-BA1 Remote Utility** 建立原来的 IC-9700 LAN 会话，
+   保留现有的 RS-BA1 虚拟 COM。如果 SkyCAT 已启动，不要再次启动
+   占用同一 COM 的另一个 SkyCAT 实例。
+2. 让 **SkyCAT 独占其原先的 CI-V 虚拟 COM**，例如：
+   ```powershell
+   skycatd.exe -m IC-9700 -r COM9 -s 115200
+   ```
+   同一个串口对外提供四个不同的本机端口：CAT **4532**、
+   WSJT-X **4534**、频谱流 **4535**、Switch 辅助设置 **4537**。
+3. **SkyRoof** 的 CAT 连接保持 `127.0.0.1:4532`，继续负责
+   卫星频率、模式、多普勒与 PTT。频谱可按照已有配置选择
+   RS-BA1 Passive LAN 数据源或 SkyCAT 的二进制 4535 流。
+4. **Remote Control Switch → 连接设置** 中选择 **SkyCAT TCP**，
+   输入 `127.0.0.1:4537`，保存配置后再点击「连接」。
+   此方式**不会再次打开** RS-BA1 的 COM。
 
-使用 IC-9700 官方 CI-V 选择器 `1A 05 01 15/16/05`、
-`16 44`、`14 0E/0C/0A`、`16 5A`。
-数据值保留原始十六进制形式；`14` 的数值为两字节 BCD
-`0000..0255`，不直接传十进制百分比。
+TCP 连接地址由 **Remote Control Switch** 自己保存在本地；
+SkyCAT 不负责保存客户端的连接资料。修改电台参数时会立即发送
+CI-V 指令；单纯保存地址不会写入电台。TCP 握手成功后，电台
+状态读取仍可能需要一些时间。
 
-专用端口**不提供原始 CI-V 透传**，拒绝 PTT、VFO/MAIN/SUB
-切换、卫星模式写入、频率及工作模式修改。所有命令共享 SkyCAT
-原有的串口命令锁，不额外连接电台或占用 COM。
-SkyRoof 继续负责卫星跟踪及多普勒，RS-BA1 配置不变。
-分开的 TCP 端口并不代表拥有独立的硬件控制链路。
+请注意：四个端口不是四个独立硬件连接。Switch 与普通 CAT
+客户端最终仍然共用同一条 CI-V 串口链路及
+`CatServer.commandLock`，通过串行执行来避免应答相互干扰。
+Switch 专用接口禁止 SAT 模式写入、MAIN/SUB/VFO 切换、频率、
+工作模式、PTT 以及任意原始 CI-V 指令；这些控制应交给 SkyRoof。
+
+### Switch 专用 TCP 协议
+
+该端口使用**逐行 ASCII 文本协议**，每条指令以换行符 `\n`
+结尾，返回一行结果。它不是 4532 的 Hamlib rigctl 接口，
+也不是 4535 的二进制频谱接口。
+
+`PING` 返回 `PONG`，无需发出无线电 CI-V 查询，可以用于确认
+已连接到正确的 Switch 服务。但请求仍可能短暂等待共享命令锁。
+
+```text
+PING
+PONG
+GET DATA_OFF
+VALUE 05
+SET DATA_OFF 05
+OK
+```
+
+| 参数 | 支持的请求示例 | IC-9700 CI-V 选择器 | 数据格式 |
+|---|---|---|---|
+| DATA OFF 输入源 | `GET DATA_OFF`、`SET DATA_OFF 05` | `1A 05 01 15` | 1 字节，`00..05` |
+| DATA ON 输入源 | `GET DATA_MOD`、`SET DATA_MOD 03` | `1A 05 01 16` | 1 字节，`00..05` |
+| USB AF/IF 输出 | `GET USB_OUTPUT`、`SET USB_OUTPUT 01` | `1A 05 01 05` | `00` AF / `01` IF |
+| Speech Compressor | `GET COMP`、`SET COMP 01` | `16 44` | `00` 关闭 / `01` 开启 |
+| 压缩等级 | `GET COMP_LEVEL`、`SET COMP_LEVEL 0128` | `14 0E` | 2 字节 BCD，`0000..0255` |
+| CW 发报速度 | `GET KEY_SPEED`、`SET KEY_SPEED 0128` | `14 0C` | 2 字节 BCD，`0000..0255` |
+| RF Power 发射功率 | `GET RF_POWER`、`SET RF_POWER 0128` | `14 0A` | 2 字节 BCD，`0000..0255` |
+| SAT 模式 | `GET SAT_MODE` | `16 5A` | **只读**，`00` / `01` |
+
+DATA OFF / DATA MOD 输入源值：`00` MIC、`01` ACC、
+`02` MIC+ACC、`03` USB、`04` MIC+USB、`05` LAN。
+
+`GET` 成功时返回 `VALUE <HEX>`。这里的 `HEX` 是
+**大写十六进制的原始 CI-V 数据**，不是十进制百分比。
+`SET` 只有收到电台确认 ACK 才返回 `OK`；失败时根据情况
+返回 `ERR INVALID`、`ERR DISCONNECTED`、`ERR TIMEOUT`、
+`ERR RADIO` 或 `ERR UNSUPPORTED`。
+选择器和 BCD 格式与 IC-9700 CI-V Reference Guide 及
+Remote Control Switch 现有实现一致，不提供 CI-V 透明透传。
+
+### Windows 端口冲突排查
+
+如果 SkyCAT 报告 **`Switch TCP listener error`**，伴随
+Windows Socket **10048**（通常每个套接字地址只允许使用一次），
+可在 PowerShell 中查询端口的实际占用者：
+
+```powershell
+Get-NetTCPConnection -LocalPort 4537 -State Listen -ErrorAction SilentlyContinue |
+  Select-Object LocalAddress, LocalPort, OwningProcess,
+    @{Name='Process';Expression={
+      (Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue).ProcessName
+    }}
+```
+
+早期默认端口为 **4536**，曾在实际使用中与本机 `node.exe`
+监听冲突，因此新版本默认改为 **4537**。Remote Control Switch
+会将**旧默认的 localhost:4536** 保存配置自动迁移到 4537，
+但不会修改用户自定义端口。
+
+如果 4537 也已被占用，先确认是哪个进程；不要直接结束未知程序。
+可以改用另一个未占用的端口，同时修改 SkyCAT 和客户端，例如：
+
+```powershell
+skycatd.exe -m IC-9700 -r COM9 --switch-port 4547
+```
+
+然后在 Remote Control Switch 中输入 `127.0.0.1:4547`。
+普通 CAT 4532、WSJT-X 4534、频谱 4535 不需要改变。
+
+如果 `PING/PONG` 能成功，但读取数据仍报 `ERR RADIO`
+或 `ERR TIMEOUT`，说明 TCP 服务已启动，应该进一步检查
+RS-BA1 虚拟 COM 和 IC-9700 的 CI-V 应答。
+**PING 仅能检查 Switch 服务是否可访问，不能证明电台已经响应。**
+
+此集成不需要增加额外的频谱诊断 UI、持续 FPS 统计或原始扫描记录。

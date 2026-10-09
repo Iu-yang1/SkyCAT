@@ -42,6 +42,20 @@ Creating a new commandset file is not difficult, all one needs for that is a tex
 
 
 
+## Fork-specific IC-9700 and SkyRoof integration
+
+The [Iu-yang1/SkyCAT fork](https://github.com/Iu-yang1/SkyCAT) adds
+loopback-only WSJT-X (`4534`), binary IC-9700 scope (`4535`) and
+[Remote Control Switch](https://github.com/Iu-yang1/IC-9700-Remote-Control-Switch)
+auxiliary-control (`4537`) endpoints alongside the main CAT port (`4532`).
+The Switch port uses a restricted `GET/SET` protocol and shares the existing
+serial CI-V transport; it is not another rigctl server or an independent COM
+connection. See the [SkyCAT + RS-BA1 + SkyRoof integration guide](skycatd.md#ic-9700-remote-control-switch-integration)
+for configuration, CI-V selectors and Windows troubleshooting.
+
+These are **fork-specific features**; do not assume upstream VE3NEA
+releases contain them.
+
 ## See Also
 
 - [SkyCAT Engine](library.md)
