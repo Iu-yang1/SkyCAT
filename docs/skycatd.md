@@ -488,6 +488,8 @@ The main SkyCAT TCP server understands the following line-oriented commands:
 | enable_scope_data | `U SCOPE_DATA 1` |
 | disable_scope_data | `U SCOPE_DATA 0` |
 | IC-9700 scope sweep FAST | `U SCOPE_FAST 1` |
+| IC-9700 hardware RF gain (0–255) | `U RF_GAIN 128` |
+| Read IC-9700 hardware RF gain (decimal 0–255) | `U RF_GAIN_READ` |
 | Read MAIN/SUB scope settings | `U SCOPE_READ` |
 | Select active scope | `U SCOPE_SELECT MAIN|SUB` |
 | Scope mode | `U SCOPE_MODE MAIN|SUB CENTER|FIXED|SCROLL-C|SCROLL-F` |
