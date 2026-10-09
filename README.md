@@ -1,6 +1,16 @@
 # SkyCAT
 
-Please see the [SkyCAT web site](https://ve3nea.github.io/SkyCAT/index.html)
+Documentation sites:
+
+- **[SkyCAT fork — GitHub Pages](https://iu-yang1.github.io/SkyCAT/)**
+- **[SkyCAT fork — 简体中文](https://iu-yang1.github.io/SkyCAT/zh-cn/)**
+- **[Live GitHub Pages Deployments](https://github.com/Iu-yang1/SkyCAT/deployments)** — open `github-pages` to view the current site and deployment history.
+- [Upstream VE3NEA SkyCAT documentation](https://ve3nea.github.io/SkyCAT/index.html)
+
+The fork uses GitHub Pages' native **pages build and deployment** workflow.
+Each successful documentation publish already creates a real `github-pages`
+deployment with its public URL. It does **not** require a second publishing
+workflow or an unrelated environment.
 
 ## Fork additions
 

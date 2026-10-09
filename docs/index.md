@@ -56,6 +56,15 @@ for configuration, CI-V selectors and Windows troubleshooting.
 These are **fork-specific features**; do not assume upstream VE3NEA
 releases contain them.
 
+## Live documentation deployment
+
+This fork's documentation is published at
+**[iu-yang1.github.io/SkyCAT](https://iu-yang1.github.io/SkyCAT/)**.
+See the **[GitHub Deployments](https://github.com/Iu-yang1/SkyCAT/deployments)**
+page and choose the `github-pages` environment for the published URL and
+history. The existing native GitHub Pages build performs the publication;
+a separate build workflow is not necessary.
+
 ## See Also
 
 - [SkyCAT Engine](library.md)
