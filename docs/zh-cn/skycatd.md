@@ -470,6 +470,8 @@ dotnet skycatd.dll <parameters>
 | 开启 Scope 数据 | `U SCOPE_DATA 1` |
 | 关闭 Scope 数据 | `U SCOPE_DATA 0` |
 | IC-9700 Scope FAST | `U SCOPE_FAST 1` |
+| 设置 IC-9700 硬件 RF 增益（0–255） | `U RF_GAIN 128` |
+| 读取 IC-9700 硬件 RF 增益（十进制 0–255） | `U RF_GAIN_READ` |
 | 读取 MAIN/SUB 频谱配置 | `U SCOPE_READ` |
 | 选择 MAIN/SUB | `U SCOPE_SELECT MAIN|SUB` |
 | 中心/固定/滚动频谱模式 | `U SCOPE_MODE MAIN|SUB CENTER|FIXED|SCROLL-C|SCROLL-F` |
