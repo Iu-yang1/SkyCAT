@@ -48,6 +48,26 @@ namespace SkyCat.Tests
       Assert.Equal("RPRT -11", Make().Execute("f"));
     }
 
+    [Theory]
+    [InlineData("F 2400000000")]
+    [InlineData("I 10000000000")]
+    public void HighFrequencyCommandsReachRigDispatcherWithoutInt32Overflow(
+      string command)
+    {
+      // No radio setup means unsupported-command rather than the parser's
+      // legacy RPRT -11 fallback for an overflowing Int32. The actual BCD
+      // payload is separately validated against the model's byte width.
+      Assert.Equal("RPRT -11", Make().Execute(command));
+    }
+
+    [Theory]
+    [InlineData("F -1")]
+    [InlineData("I -100")]
+    [InlineData("F 999999999999999999999999")]
+    [InlineData("I NaN")]
+    public void InvalidFrequencyTextIsNeverDispatched(string command) =>
+      Assert.Equal("RPRT -11", Make().Execute(command));
+
     // the tone commands are routed now, but TS-2000 defines no CTCSS commands (and no radio is set
     // up here), so they must report "not available" rather than crash
     [Theory]
