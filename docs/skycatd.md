@@ -624,6 +624,44 @@ frames may be dropped so scope traffic cannot block CAT commands.
 
 The scope stream is intended for live display rather than lossless capture.
 
+### Native SkyCAT scope-rate diagnostics (P1-P3 follow-up)
+
+SkyCAT's native spectrum TCP stream preserves its 4-byte little-endian
+frame-length prefix followed by an unmodified complete CI-V `27 00` frame.
+A sweep may span up to eleven CI-V **chunks**; TCP chunks are not the same
+as completed screen sweeps. The per-client bounded buffer now holds up to
+64 chunks (instead of 3) to absorb brief scheduling stalls.
+
+While a native scope client is connected, SkyCAT logs approximately every
+10 seconds:
+
+```text
+Native scope transport: input 110.0 chunks/s, sent 110.0 chunks/s, dropped 0.0 chunks/s, complete input sweeps 10.0/s, incomplete input sweeps 0.0/s, invalid scope chunks 0.0/s; clients 1.
+```
+
+The example is illustrative, **not a measured IC-9700 performance result**.
+A full scan can consist of a single CI-V frame or multiple chunks; use
+`complete input sweeps/s`, not `input chunks/s`, to estimate the physical
+scanning frequency.
+
+Interpretation:
+- **Low complete-input rate**, low drop rate: radio scope generation, CI-V
+  baud/virtual COM, or concurrent CAT readback is limiting the source.
+  TCP buffering cannot create missing source sweeps.
+- **High complete-input rate**, nonzero drop rate: the TCP client or local
+  scheduling cannot consume data quickly enough; reduce client load or
+  inspect receiver buffering.
+- **High complete-input rate**, zero TCP drops, low SkyRoof display FPS:
+  inspect SkyRoof's scope assembler sequencing, intermediate queues, and
+  drawing timer. SkyRoof's UI redraw rate is not necessarily complete-sweep FPS.
+- **High incomplete-input rate**: upstream CI-V bytes/frames are missing or
+  arriving out of sequence, before the TCP queue receives them.
+
+These metrics are independent of the normal CAT/WSJT-X text interfaces.
+This change does not alter the radio's serial baud rate and does not
+guarantee a specific on-air or display FPS.
+
+
 ## Notes
 
 - The main CAT server defaults to loopback-only for safety.
