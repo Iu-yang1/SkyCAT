@@ -260,19 +260,12 @@ namespace SkyCat
           throw new InvalidReplyException(
             $"Radio rejected scope query 27 {subCommand:X2}.");
 
-        int expectedLength = 7 + selectors.Length + expectedValueBytes;
-        if (frame.Length != expectedLength ||
-            frame[0] != 0xFE || frame[1] != 0xFE ||
-            frame[2] != 0xE0 || frame[3] != 0xA2 ||
-            frame[4] != 0x27 || frame[5] != subCommand ||
-            frame[^1] != 0xFD ||
-            !frame.AsSpan(6, selectors.Length).SequenceEqual(selectors))
-        {
-          skipped++;
-          continue;
-        }
+        if (IcomScopeCivCodec.TryExtractQueryReply(
+              frame, subCommand, selectors, expectedValueBytes,
+              out byte[] value))
+          return value;
 
-        return frame.AsSpan(6 + selectors.Length, expectedValueBytes).ToArray();
+        skipped++;
       }
 
       throw new TimeoutException(
