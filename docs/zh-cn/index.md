@@ -52,6 +52,15 @@ SkyCAT 通过 `Rigs/*.json` 命令集文件支持不同电台。当前仓库已�
 要增加新电台，一般只需要文本编辑器和可用于实机测试的电台。命令集格式请参阅
 [SkyCAT 命令集文件格式](commandset-format.md)。
 
+## GitHub Pages 部署入口
+
+当前 fork 的中文文档发布在
+**[iu-yang1.github.io/SkyCAT/zh-cn](https://iu-yang1.github.io/SkyCAT/zh-cn/)**。
+可进入 **[GitHub Deployments](https://github.com/Iu-yang1/SkyCAT/deployments)**，
+选择 `github-pages` 环境，查看当前网站 URL 和每次部署记录。
+仓库继续使用 GitHub Pages 内置的 `pages build and deployment`，
+不再添加第二条重复的文档部署流水线。
+
 ## 中文文档
 
 - [SkyCAT 类库](library.md)
