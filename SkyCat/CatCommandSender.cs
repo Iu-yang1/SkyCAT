@@ -255,6 +255,75 @@ namespace SkyCat
     }
 
     /// <summary>
+    /// Send a validated IC-9700 CI-V Command 17 CW message. The radio itself
+    /// transmits the text only when it is in CW/CW-R and either BK-IN or a TX
+    /// switch is active. Higher layers deliberately preflight those conditions
+    /// before calling this method.
+    /// </summary>
+    public void SendIcomCwMessage(string text)
+    {
+      ValidateIcomScopeTransport();
+      byte[] frame =
+        IcomCwMessageCodec.BuildSend(text);
+
+      _ = SendMessage(new CatMessage {
+        Command =
+          frame.Select(b => (byte?)b).ToArray(),
+        Reply =
+          new byte?[] {
+            0xFE, 0xFE,
+            0xE0, 0xA2,
+            0xFB, 0xFD
+          },
+        Comment =
+          "IC-9700 CW Command 17 message"
+      });
+    }
+
+    /// <summary>
+    /// Fail-safe stop for an in-progress IC-9700 Command 17 message. The stop
+    /// data byte is binary FF, not the two ASCII characters 'F''F'.
+    /// </summary>
+    public void StopIcomCwMessage()
+    {
+      ValidateIcomScopeTransport();
+      byte[] frame =
+        IcomCwMessageCodec.BuildStop();
+
+      _ = SendMessage(new CatMessage {
+        Command =
+          frame.Select(b => (byte?)b).ToArray(),
+        Reply =
+          new byte?[] {
+            0xFE, 0xFE,
+            0xE0, 0xA2,
+            0xFB, 0xFD
+          },
+        Comment =
+          "IC-9700 CW Command 17 stop"
+      });
+    }
+
+    /// <summary>
+    /// Read IC-9700 BK-IN state through CI-V 16 47.
+    /// 0=OFF, 1=Semi BK-IN, 2=Full BK-IN.
+    /// </summary>
+    public int ReadIcomBreakInMode()
+    {
+      byte[] value =
+        ReadIcomSwitchSetting(
+          new byte[] { 0x16, 0x47 },
+          1);
+
+      if (value.Length != 1 ||
+          value[0] > 2)
+        throw new InvalidReplyException(
+          "IC-9700 returned an invalid BK-IN value.");
+
+      return value[0];
+    }
+
+    /// <summary>
     /// Change the hardware RF gain of the IC-9700 through its existing CAT
     /// transport. RS-BA1's *audio* gain is intentionally not controlled here.
     /// This method is invoked under CatServer.commandLock.
