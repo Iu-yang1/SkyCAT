@@ -1,4 +1,5 @@
 using System.Globalization;
+using Microsoft.Extensions.Logging;
 using SkyCat;
 
 namespace skycatd
@@ -135,11 +136,11 @@ namespace skycatd
         // not let an invalid/swap-reversed range be written to the rig.
         if (low < 0 || high <= low || high > 1_300_000_000 ||
             low < 144_000_000 ||
-            range switch {
+            (range switch {
               1 => low < 144_000_000 || high > 148_000_000,
               2 => low < 430_000_000 || high > 450_000_000,
               3 => low < 1_240_000_000 || high > 1_300_000_000,
-              _ => true })
+              _ => true }))
           throw new ArgumentException("Fixed edges outside IC-9700 band limits.");
 
         return (0x1E, new[] { range, edge }
