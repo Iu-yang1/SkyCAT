@@ -261,9 +261,11 @@ namespace SkyCat
     /// </summary>
     public void SendIcomCwText(string text)
     {
+      byte[] command =
+        IcomCwKeyerCodec.BuildSend(text);
       ValidateIcomCwTransport();
       SendIcomCwWrite(
-        IcomCwKeyerCodec.BuildSend(text),
+        command,
         "IC-9700 CW message 17");
     }
 
@@ -283,9 +285,11 @@ namespace SkyCat
     /// </summary>
     public void SetIcomCwSpeed(int wpm)
     {
+      byte[] command =
+        IcomCwKeyerCodec.BuildSpeedWrite(wpm);
       ValidateIcomCwTransport();
       SendIcomCwWrite(
-        IcomCwKeyerCodec.BuildSpeedWrite(wpm),
+        command,
         $"IC-9700 CW key speed {wpm} WPM");
     }
 
