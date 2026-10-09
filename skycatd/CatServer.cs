@@ -30,6 +30,10 @@ namespace skycatd
     private PortStatus TcpStatus;
     private PortStatus WsjtXTcpStatus;
     private PortStatus ScopeTcpStatus;
+    private DateTime LastScopeStatisticsUtc = DateTime.UtcNow;
+    private long LastScopeInput;
+    private long LastScopeSent;
+    private long LastScopeDropped;
 
     public CatServer(Options options)
     {
@@ -265,6 +269,29 @@ namespace skycatd
           }
 
         SleepWithCancellation(2000);
+
+        DateTime sampleAt = DateTime.UtcNow;
+        double seconds = (sampleAt - LastScopeStatisticsUtc).TotalSeconds;
+        if (seconds >= 10)
+        {
+          var snapshot = scopeStreamServer.GetDiagnostics();
+          if (snapshot.Clients > 0)
+          {
+            logger.LogInformation(
+              "Native scope transport: input {InputRate:0.0} chunks/s, " +
+              "sent {SentRate:0.0} chunks/s, " +
+              "dropped {DropRate:0.0} chunks/s, clients {Clients}. " +
+              "Note: a full IC-9700 sweep may contain up to 11 chunks.",
+              (snapshot.Input - LastScopeInput) / seconds,
+              (snapshot.Sent - LastScopeSent) / seconds,
+              (snapshot.Dropped - LastScopeDropped) / seconds,
+              snapshot.Clients);
+          }
+          LastScopeInput = snapshot.Input;
+          LastScopeSent = snapshot.Sent;
+          LastScopeDropped = snapshot.Dropped;
+          LastScopeStatisticsUtc = sampleAt;
+        }
       }
 
       // Stop accepting/reading control clients before touching radio state.
