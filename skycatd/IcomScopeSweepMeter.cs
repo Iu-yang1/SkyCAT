@@ -62,7 +62,11 @@ namespace skycatd
         }
         else
         {
-          incomplete++;
+          // Count the sweep once when its expected next fragment is
+          // missing. Subsequent orphan fragments of the same damaged
+          // sweep must not inflate the number of incomplete *sweeps*.
+          if (expected[rx] > 1)
+            incomplete++;
           expected[rx] = 0;
         }
       }
