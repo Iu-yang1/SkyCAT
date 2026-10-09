@@ -1,8 +1,8 @@
 name: Verify published Pages site (Deployment)
 
 # GitHub's native "pages build and deployment" remains the ONLY Pages publisher.
-# This workflow records a separate, explicit documentation environment after a
-# successful native Pages build, making deployment history discoverable.
+# This workflow records an explicit production deployment for the live Docs URL.
+# It verifies availability only; GitHub's native Pages publisher owns the site.
 on:
   workflow_run:
     workflows:
@@ -19,13 +19,14 @@ permissions:
 
 jobs:
   published-documentation:
+    name: Verify live Docs (production)
     if: >-
       github.event_name != 'workflow_run' ||
       (github.event.workflow_run.conclusion == 'success' &&
        github.event.workflow_run.head_branch == 'master')
     runs-on: ubuntu-latest
     environment:
-      name: documentation
+      name: production
       url: https://iu-yang1.github.io/SkyCAT/
     steps:
       - name: Verify published English and Chinese documentation
