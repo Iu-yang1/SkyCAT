@@ -1,0 +1,45 @@
+name: Verify published Pages site (Deployment)
+
+# GitHub's native "pages build and deployment" remains the ONLY Pages publisher.
+# This workflow records a separate, explicit documentation environment after a
+# successful native Pages build, making deployment history discoverable.
+on:
+  workflow_run:
+    workflows:
+      - pages build and deployment
+    types: [completed]
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/pages-deployment-visibility.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  published-documentation:
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'master')
+    runs-on: ubuntu-latest
+    environment:
+      name: documentation
+      url: https://iu-yang1.github.io/SkyCAT/
+    steps:
+      - name: Verify published English and Chinese documentation
+        shell: bash
+        run: |
+          set -euo pipefail
+          for url in \
+            'https://iu-yang1.github.io/SkyCAT/' \
+            'https://iu-yang1.github.io/SkyCAT/zh-cn/' \
+            'https://iu-yang1.github.io/SkyCAT/skycatd.html' \
+            'https://iu-yang1.github.io/SkyCAT/zh-cn/skycatd.html'; do
+            echo "Checking ${url}"
+            curl --fail --location --silent --show-error \
+              --retry 5 --retry-delay 5 --retry-all-errors \
+              --output /dev/null "${url}"
+          done
+          echo 'Published SkyCAT documentation is reachable.'

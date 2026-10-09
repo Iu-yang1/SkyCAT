@@ -56,10 +56,12 @@ SkyCAT 通过 `Rigs/*.json` 命令集文件支持不同电台。当前仓库已�
 
 当前 fork 的中文文档发布在
 **[iu-yang1.github.io/SkyCAT/zh-cn](https://iu-yang1.github.io/SkyCAT/zh-cn/)**。
-可进入 **[GitHub Deployments](https://github.com/Iu-yang1/SkyCAT/deployments)**，
-选择 `github-pages` 环境，查看当前网站 URL 和每次部署记录。
-仓库继续使用 GitHub Pages 内置的 `pages build and deployment`，
-不再添加第二条重复的文档部署流水线。
+可在 [GitHub Actions](https://github.com/Iu-yang1/SkyCAT/actions) 查看原生
+`pages build and deployment` 发布记录，并通过
+[文档部署验证工作流](https://github.com/Iu-yang1/SkyCAT/actions/workflows/pages-deployment-visibility.yml)
+查看 `documentation` 环境及网站地址。验证工作流只会在原生 Pages
+发布成功后检查中英文网页可达性，**不会重复构建或发布网站**。
+即使 GitHub 的 Deployments 仪表板不可用，上述 Actions 入口也能查看历史。
 
 ## 中文文档
 

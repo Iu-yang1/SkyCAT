@@ -4,12 +4,15 @@ Documentation sites:
 
 - **[SkyCAT fork — GitHub Pages](https://iu-yang1.github.io/SkyCAT/)**
 - **[SkyCAT fork — 简体中文](https://iu-yang1.github.io/SkyCAT/zh-cn/)**
+- **[Pages publishing history (Actions)](https://github.com/Iu-yang1/SkyCAT/actions)** — GitHub's native `pages build and deployment`.
+- **[Verified documentation deployment](https://github.com/Iu-yang1/SkyCAT/actions/workflows/pages-deployment-visibility.yml)** — separate `documentation` environment, linked to the published site.
 - [Upstream VE3NEA SkyCAT documentation](https://ve3nea.github.io/SkyCAT/index.html)
 
 The fork uses GitHub Pages' native **pages build and deployment** workflow.
-Each successful documentation publish already creates a real `github-pages`
-deployment with its public URL. It does **not** require a second publishing
-workflow or an unrelated environment.
+The native Pages workflow is the only publisher. An additional lightweight
+verification workflow records a `documentation` environment and public URL
+after a successful native publication. It does **not** rebuild or republish the
+site. Use the Actions links above if GitHub's Deployments dashboard is unavailable.
 
 ## Fork additions
 
