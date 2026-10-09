@@ -27,8 +27,8 @@ namespace skycatd
         Client.NoDelay = true;
         Stream = client.GetStream();
 
-        // Scope is a live display, not a lossless recording stream. Keep only a
-        // bounded recent data so a slow TCP client cannot backpressure
+        // Scope is a live display, not a lossless recording stream. Keep a
+        // bounded recent queue so a slow TCP client cannot backpressure
         // the CI-V parser or the shared CAT command lock.
         // IC-9700 emits a sweep as up to 11 distinct 27 00 CI-V
         // chunks. A three-*chunk* buffer dropped parts of the same sweep
@@ -223,6 +223,9 @@ namespace skycatd
 
       Logger.LogInformation("Scope stream server stopped.");
     }
+
+    // Exposed for deterministic loopback integration tests using port 0.
+    internal int BoundPort => (Listener?.LocalEndpoint as IPEndPoint)?.Port ?? 0;
 
     internal bool HasClients => !Clients.IsEmpty;
 
