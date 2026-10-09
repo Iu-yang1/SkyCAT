@@ -10,6 +10,9 @@ namespace SkyCat.Tests
     private static CommandInterpreter Make() =>
       new(new Options { Model = "TS-2000", RigFile = "COM99" }, null);
 
+    private static CommandInterpreter MakeIc9700() =>
+      new(new Options { Model = "IC-9700", RigFile = "COM99" }, null);
+
 
     [Theory]
     [InlineData("")]
@@ -39,6 +42,87 @@ namespace SkyCat.Tests
     {
       var reply = Make().Execute("a");
       Assert.Contains("\"model\":\"TS-2000\"", reply);
+    }
+
+    [Fact]
+    public void Ic9700CwCapabilitiesAreQueryableWithoutOpeningSerial()
+    {
+      string reply =
+        MakeIc9700().Execute(
+          "U CW_CAPS");
+
+      Assert.Contains(
+        "\"version\":1",
+        reply);
+      Assert.Contains(
+        "\"model\":\"IC-9700\"",
+        reply);
+      Assert.Contains(
+        "\"max_chars\":30",
+        reply);
+      Assert.Contains(
+        "\"encoding\":\"base64-ascii\"",
+        reply);
+      Assert.Contains(
+        "\"abort\":true",
+        reply);
+    }
+
+    [Fact]
+    public void NonIc9700DoesNotAdvertiseCwMessageControl()
+    {
+      Assert.Equal(
+        "RPRT -11",
+        Make().Execute(
+          "U CW_CAPS"));
+    }
+
+    [Fact]
+    public void ValidCwSendReachesSenderAfterProtocolValidation()
+    {
+      string encoded =
+        Convert.ToBase64String(
+          System.Text.Encoding.ASCII.GetBytes(
+            "CQ DE K1ABC"));
+
+      // Closed COM99 is intentional: -6 proves parsing, model gating and
+      // Base64/character validation all succeeded before transport access.
+      Assert.Equal(
+        "RPRT -6",
+        MakeIc9700().Execute(
+          $"U CW_SEND64 {encoded}"));
+    }
+
+    [Theory]
+    [InlineData("***")]
+    [InlineData("Q1FfREU=")] // "CQ_DE": underscore is not an IC-9700 CW character
+    public void InvalidCwSendPayloadIsRejectedBeforeTransport(
+      string encoded)
+    {
+      Assert.Equal(
+        "RPRT -1",
+        MakeIc9700().Execute(
+          $"U CW_SEND64 {encoded}"));
+    }
+
+    [Fact]
+    public void Ic9700CwAbortReachesSenderAfterModelGate()
+    {
+      Assert.Equal(
+        "RPRT -6",
+        MakeIc9700().Execute(
+          "U CW_ABORT"));
+    }
+
+    [Theory]
+    [InlineData("U CW_SEND64 Q1EgREUgSzFBQkM=")]
+    [InlineData("U CW_ABORT")]
+    public void NonIc9700RejectsCwWrites(
+      string command)
+    {
+      Assert.Equal(
+        "RPRT -11",
+        Make().Execute(command));
     }
 
     [Fact]
