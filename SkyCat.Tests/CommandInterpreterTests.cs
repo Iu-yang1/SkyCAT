@@ -48,6 +48,45 @@ namespace SkyCat.Tests
       Assert.Equal("RPRT -11", Make().Execute("f"));
     }
 
+    [Fact]
+    public void FrequencyWriteSignaturesUseInt64NotInt32()
+    {
+      var type = typeof(CommandInterpreter);
+      foreach (string method in new[] { "CmdFInt", "CmdIInt" })
+      {
+        var info = type.GetMethod(method,
+          System.Reflection.BindingFlags.NonPublic |
+          System.Reflection.BindingFlags.Instance);
+        Assert.NotNull(info);
+        Assert.Equal(typeof(long),
+          Assert.Single(info.GetParameters()).ParameterType);
+      }
+    }
+
+    [Fact]
+    public void Ic905MicrowaveFrequencySurvivesLittleEndianBcdCodec()
+    {
+      var sender = new SkyCat.CatCommandSender();
+      var param = new SkyCat.CatCommandSet.ParamInfo
+      {
+        Format = SkyCat.CatParamFormat.BCD_LE
+      };
+      var encode = typeof(SkyCat.CatCommandSender).GetMethod(
+        "ParamToBytes",
+        System.Reflection.BindingFlags.NonPublic |
+        System.Reflection.BindingFlags.Instance)!;
+      var decode = typeof(SkyCat.CatCommandSender).GetMethod(
+        "BytesToParam",
+        System.Reflection.BindingFlags.NonPublic |
+        System.Reflection.BindingFlags.Instance)!;
+
+      byte[] payload = (byte[])encode.Invoke(sender,
+        new object?[] { param, "2400000000", 5 })!;
+      Assert.Equal(new byte[] { 0x00, 0x00, 0x00, 0x00, 0x24 }, payload);
+      Assert.Equal("2400000000",
+        decode.Invoke(sender, new object?[] { param, payload }));
+    }
+
     [Theory]
     [InlineData("F 2400000000")]
     [InlineData("I 10000000000")]
