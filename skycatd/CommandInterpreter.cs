@@ -44,6 +44,10 @@ namespace skycatd
         "U" when args.Length == 3 && args[1] == "SCOPE_DATA" && args[2] == "1" => SendCommandIfAvailable(CatCommand.enable_scope_data),
         "U" when args.Length == 3 && args[1] == "SCOPE_DATA" && args[2] == "0" => SendCommandIfAvailable(CatCommand.disable_scope_data),
         "U" when args.Length == 3 && args[1] == "SCOPE_FAST" && args[2] == "1" => SetScopeFast(),
+        "U" when args.Length == 2 && args[1] == "RF_GAIN_READ" =>
+          ReadIcomRfGain(),
+        "U" when args.Length == 3 && args[1] == "RF_GAIN" =>
+          WriteIcomRfGain(args[2]),
         // SkyRoof's full spectrum-control protocol. The former interpreter
         // rejected all of these with RPRT -11, leaving controls waiting for
         // SCOPE_READ forever even though the waveform stream was live.
@@ -85,6 +89,51 @@ namespace skycatd
     private string CmdT0(string value) => SendCommandIfAvailable(CatCommand.write_ptt_off, value);
     private string CmdT1(string value) => SendCommandIfAvailable(CatCommand.write_ptt_on, value);
     private string CmdC(int toneTenthsHz) => SendCommandIfAvailable(CatCommand.write_ctcss_tone, toneTenthsHz.ToString());
+
+    private string ReadIcomRfGain()
+    {
+      try
+      {
+        return CommandSender.ReadIcomRfGain().ToString(
+          System.Globalization.CultureInfo.InvariantCulture);
+      }
+      catch (Exception ex)
+      {
+        return FormatRfGainError(ex);
+      }
+    }
+
+    private string WriteIcomRfGain(string rawValue)
+    {
+      if (!int.TryParse(rawValue, System.Globalization.NumberStyles.None,
+          System.Globalization.CultureInfo.InvariantCulture, out int gain) ||
+          gain is < 0 or > 255)
+        return "RPRT -1";
+
+      try
+      {
+        CommandSender.SetIcomRfGain(gain);
+        return "RPRT 0";
+      }
+      catch (Exception ex)
+      {
+        return FormatRfGainError(ex);
+      }
+    }
+
+    private string FormatRfGainError(Exception ex)
+    {
+      CommandSender.Log?.LogWarning(
+        "IC-9700 RF gain CAT operation failed: {Error}", ex.Message);
+      return ex switch {
+        NotSupportedException => "RPRT -11",
+        InvalidOperationException => "RPRT -6",
+        ArgumentException => "RPRT -1",
+        TimeoutException => "RPRT -5",
+        InvalidReplyException or FormatException => "RPRT -9",
+        _ => "RPRT -7"
+      };
+    }
 
     private string SetScopeFast()
     {
