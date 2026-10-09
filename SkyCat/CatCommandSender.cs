@@ -193,6 +193,95 @@ namespace SkyCat
     }
 
 
+    /// <summary>
+    /// Execute an IC-9700 CI-V 27 xx scope write under CatServer's shared
+    /// command lock. The built-in CI-V receive path filters unsolicited
+    /// waveform 27 00 frames while awaiting a radio FB/FA acknowledgement.
+    /// </summary>
+    public void WriteIcomScope(byte subCommand, params byte[] data)
+    {
+      ValidateIcomScopeTransport();
+      var command = new byte?[7 + data.Length];
+      command[0] = 0xFE;
+      command[1] = 0xFE;
+      command[2] = 0xA2;
+      command[3] = 0xE0;
+      command[4] = 0x27;
+      command[5] = subCommand;
+      for (int i = 0; i < data.Length; i++) command[6 + i] = data[i];
+      command[^1] = 0xFD;
+
+      _ = SendMessage(new CatMessage {
+        Command = command,
+        Reply = new byte?[] { 0xFE, 0xFE, 0xE0, 0xA2, 0xFB, 0xFD },
+        Comment = $"IC-9700 scope 27 {subCommand:X2} write"
+      });
+    }
+
+    /// <summary>
+    /// Query a scope parameter. The reply echoes the 27 xx subcommand and
+    /// all selector bytes before the data; strict validation prevents treating
+    /// a stray asynchronous CI-V frame as the requested value.
+    /// </summary>
+    public byte[] ReadIcomScope(
+      byte subCommand, int expectedValueBytes, params byte[] selectors)
+    {
+      ValidateIcomScopeTransport();
+      if (expectedValueBytes <= 0 || expectedValueBytes > 32)
+        throw new ArgumentOutOfRangeException(nameof(expectedValueBytes));
+
+      DumpUnexpectedBytes();
+      byte[] request = new byte[7 + selectors.Length];
+      request[0] = 0xFE;
+      request[1] = 0xFE;
+      request[2] = 0xA2;
+      request[3] = 0xE0;
+      request[4] = 0x27;
+      request[5] = subCommand;
+      selectors.CopyTo(request, 6);
+      request[^1] = 0xFD;
+
+      Log?.LogTrace("  Scope query: {Hex}", BitConverter.ToString(request));
+      SerialPort.Write(request, 0, request.Length);
+      SkipEcho(request);
+
+      const int timeoutMs = 1500;
+      long deadline = Environment.TickCount64 + timeoutMs;
+      int skipped = 0;
+      while (Environment.TickCount64 < deadline)
+      {
+        byte[]? frame = ReceiveCivFrame(
+          (int)Math.Max(1, deadline - Environment.TickCount64));
+        if (frame == null) break;
+        if (frame.Length == 6 &&
+            frame[0] == 0xFE && frame[1] == 0xFE &&
+            frame[2] == 0xE0 && frame[3] == 0xA2 &&
+            frame[4] == 0xFA && frame[5] == 0xFD)
+          throw new InvalidReplyException(
+            $"Radio rejected scope query 27 {subCommand:X2}.");
+
+        if (IcomScopeCivCodec.TryExtractQueryReply(
+              frame, subCommand, selectors, expectedValueBytes,
+              out byte[] value))
+          return value;
+
+        skipped++;
+      }
+
+      throw new TimeoutException(
+        $"No matching CI-V response to 27 {subCommand:X2} " +
+        $"({BitConverter.ToString(selectors)}); skipped {skipped} unrelated frames.");
+    }
+
+    private void ValidateIcomScopeTransport()
+    {
+      if (!string.Equals(RadioName, "IC-9700", StringComparison.OrdinalIgnoreCase))
+        throw new NotSupportedException("IC-9700 scope commands require the IC-9700 rig model.");
+      if (!SerialPort.IsOpen)
+        throw new InvalidOperationException("SkyCAT serial CAT port is not connected.");
+    }
+
+
     //----------------------------------------------------------------------------------------------
     //                                send and receive
     //----------------------------------------------------------------------------------------------
