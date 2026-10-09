@@ -18,6 +18,7 @@ namespace skycatd
     private readonly Microsoft.Extensions.Logging.ILogger logger;
     private readonly TcpServer tcpServer;
     private readonly TcpServer? wsjtXTcpServer;
+    private readonly TcpServer? switchTcpServer;
     private readonly ScopeStreamServer scopeStreamServer;
     private readonly CommandInterpreter commandInterpreter;
     private readonly CatCommandSender commandSender;
@@ -30,6 +31,7 @@ namespace skycatd
     private PortStatus TcpStatus;
     private PortStatus WsjtXTcpStatus;
     private PortStatus ScopeTcpStatus;
+    private PortStatus SwitchTcpStatus;
 
     public CatServer(Options options)
     {
@@ -64,6 +66,18 @@ namespace skycatd
           var session = new PttCommandSession(commandInterpreter.Execute, logger, "CAT", pttLease);
           return new TcpClientSession(session.Execute, session.EnsurePttOff);
         });
+
+      // Separate loopback socket, sharing the original serial transaction lock.
+      if (!options.DisableSwitchPort &&
+          string.Equals(commandSender.RadioName, "IC-9700",
+            StringComparison.OrdinalIgnoreCase))
+        switchTcpServer = new TcpServer(
+          options.SwitchPort,
+          request => IcomSwitchCommands.Execute(commandSender, request),
+          logger,
+          IPAddress.Loopback,
+          commandLock,
+          serverName: "IC-9700 Remote Control Switch");
 
       if (!options.DisableWsjtXProxy)
       {
@@ -207,11 +221,13 @@ namespace skycatd
             if (ComStatus == PortStatus.WasClosed) logger.LogTrace(message); else logger.LogWarning(message);
             tcpServer.Stop();
             wsjtXTcpServer?.Stop();
+            switchTcpServer?.Stop();
             scopeStreamServer.Stop();
             ComStatus = PortStatus.WasClosed;
             TcpStatus = PortStatus.WasClosed;
             WsjtXTcpStatus = PortStatus.WasClosed;
             ScopeTcpStatus = PortStatus.WasClosed;
+            SwitchTcpStatus = PortStatus.WasClosed;
           }
 
         // if com is open, try to start the main SkyCAT TCP server
@@ -247,6 +263,22 @@ namespace skycatd
             WsjtXTcpStatus = PortStatus.WasClosed;
           }
 
+        // Only auxiliary settings: this endpoint cannot select VFO/PTT or retune.
+        if (serialPort.IsOpen && switchTcpServer != null && !switchTcpServer.IsListening())
+          try
+          {
+            switchTcpServer.Start();
+            SwitchTcpStatus = PortStatus.WasOpen;
+            logger.LogInformation(
+              $"IC-9700 auxiliary Switch server started on 127.0.0.1:{options.SwitchPort}.");
+          }
+          catch (Exception ex)
+          {
+            if (SwitchTcpStatus != PortStatus.WasClosed)
+              logger.LogWarning($"Switch TCP listener error: {ex.Message}");
+            SwitchTcpStatus = PortStatus.WasClosed;
+          }
+
         // Native IC-9700 scope frames are exported separately so scope traffic can
         // never corrupt the line-oriented CAT/rigctl protocol.
         if (serialPort.IsOpen && !scopeStreamServer.IsListening())
@@ -271,6 +303,7 @@ namespace skycatd
       // Then release any CAT PTT asserted through either the WSJT-X proxy or the
       // main SkyCAT command endpoint while the serial port is still available.
       wsjtXTcpServer?.Stop();
+      switchTcpServer?.Stop();
       tcpServer.Stop();
       ReleasePttBeforeShutdown();
 
