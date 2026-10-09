@@ -12,6 +12,7 @@ namespace skycatd
     private readonly object Sync = new();
     private object? Owner;
     private bool MayBeKeyed;
+    private bool Orphaned;
 
     public PttLeaseManager(Func<string, string> forward) =>
       Forward = forward;
@@ -31,6 +32,11 @@ namespace skycatd
     {
       lock (Sync)
       {
+        // After a serial outage a disconnected client may retain an
+        // uncertain lease. First prove the transmitter is OFF before
+        // transferring ownership; a failed recovery remains fail-closed.
+        if (Owner != null && Orphaned)
+          TryFailSafeUnkey();
         if (Owner != null)
           return ReferenceEquals(Owner, client) && MayBeKeyed
             ? "RPRT 0"
@@ -40,6 +46,7 @@ namespace skycatd
         // the radio even if SkyCAT never received the acknowledgement.
         Owner = client;
         MayBeKeyed = true;
+        Orphaned = false;
         try
         {
           string reply = Forward("T 1");
@@ -51,6 +58,7 @@ namespace skycatd
           {
             Owner = null;
             MayBeKeyed = false;
+            Orphaned = false;
           }
           else
             TryFailSafeUnkey();
@@ -76,6 +84,7 @@ namespace skycatd
         {
           Owner = null;
           MayBeKeyed = false;
+          Orphaned = false;
         }
         return result;
       }
@@ -87,6 +96,8 @@ namespace skycatd
       {
         if (!ReferenceEquals(Owner, client)) return;
         TryFailSafeUnkey();
+        if (Owner != null)
+          Orphaned = true;
       }
     }
 
