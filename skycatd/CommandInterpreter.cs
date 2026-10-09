@@ -18,6 +18,11 @@ namespace skycatd
 
     public string Execute(string command)
     {
+      string? cwReply =
+        TryExecuteCwExtension(command);
+      if (cwReply != null)
+        return cwReply;
+
       var args = command.Split(' ', StringSplitOptions.RemoveEmptyEntries);
       if (args.Length == 0) return "RPRT -1";
 
@@ -49,6 +54,15 @@ namespace skycatd
           ReadIcomRfGain(),
         "U" when args.Length == 3 && args[1] == "RF_GAIN" =>
           WriteIcomRfGain(args[2]),
+        "U" when args.Length == 3 && args[1] == "CW_SPEED" &&
+                 int.TryParse(
+                   args[2],
+                   NumberStyles.None,
+                   CultureInfo.InvariantCulture,
+                   out var cwWpm) =>
+          SetIcomCwSpeed(cwWpm),
+        "U" when args.Length == 2 && args[1] == "CW_ABORT" =>
+          AbortIcomCw(),
         // SkyRoof's full spectrum-control protocol. The former interpreter
         // rejected all of these with RPRT -11, leaving controls waiting for
         // SCOPE_READ forever even though the waveform stream was live.
@@ -90,6 +104,93 @@ namespace skycatd
     private string CmdT0(string value) => SendCommandIfAvailable(CatCommand.write_ptt_off, value);
     private string CmdT1(string value) => SendCommandIfAvailable(CatCommand.write_ptt_on, value);
     private string CmdC(int toneTenthsHz) => SendCommandIfAvailable(CatCommand.write_ctcss_tone, toneTenthsHz.ToString());
+
+    private string? TryExecuteCwExtension(
+      string command)
+    {
+      const string sendPrefix =
+        "U CW_SEND";
+
+      if (string.Equals(
+            command,
+            sendPrefix,
+            StringComparison.Ordinal))
+        return "RPRT -1";
+
+      string prefixWithSpace =
+        sendPrefix + " ";
+      if (!command.StartsWith(
+            prefixWithSpace,
+            StringComparison.Ordinal))
+        return null;
+
+      string text =
+        command[
+          prefixWithSpace.Length..];
+
+      try
+      {
+        CommandSender.SendIcomCwText(text);
+        return "RPRT 0";
+      }
+      catch (Exception ex)
+      {
+        return FormatCwError(ex);
+      }
+    }
+
+    private string AbortIcomCw()
+    {
+      try
+      {
+        CommandSender.AbortIcomCw();
+        return "RPRT 0";
+      }
+      catch (Exception ex)
+      {
+        return FormatCwError(ex);
+      }
+    }
+
+    private string SetIcomCwSpeed(
+      int wpm)
+    {
+      try
+      {
+        CommandSender.SetIcomCwSpeed(wpm);
+        return "RPRT 0";
+      }
+      catch (Exception ex)
+      {
+        return FormatCwError(ex);
+      }
+    }
+
+    private string FormatCwError(
+      Exception ex)
+    {
+      CommandSender.Log?.LogWarning(
+        "IC-9700 CW keyer CAT operation failed: {Error}",
+        ex.Message);
+
+      return ex switch
+      {
+        NotSupportedException =>
+          "RPRT -11",
+        ArgumentException =>
+          "RPRT -1",
+        InvalidOperationException =>
+          "RPRT -6",
+        TimeoutException =>
+          "RPRT -5",
+        InvalidReplyException or
+        FormatException =>
+          "RPRT -9",
+        _ =>
+          "RPRT -7"
+      };
+    }
+
 
     private string ReadIcomRfGain()
     {
