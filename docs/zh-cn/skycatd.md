@@ -470,6 +470,19 @@ dotnet skycatd.dll <parameters>
 | 开启 Scope 数据 | `U SCOPE_DATA 1` |
 | 关闭 Scope 数据 | `U SCOPE_DATA 0` |
 | IC-9700 Scope FAST | `U SCOPE_FAST 1` |
+| 读取 MAIN/SUB 频谱配置 | `U SCOPE_READ` |
+| 选择 MAIN/SUB | `U SCOPE_SELECT MAIN|SUB` |
+| 中心/固定/滚动频谱模式 | `U SCOPE_MODE MAIN|SUB CENTER|FIXED|SCROLL-C|SCROLL-F` |
+| 中心模式扫描跨度（Hz） | `U SCOPE_SPAN MAIN|SUB 25000` |
+| 固定频谱边界编号 | `U SCOPE_EDGE MAIN|SUB 1..4` |
+| 参考电平（-20～20 dB，0.5 dB 步进） | `U SCOPE_REF MAIN|SUB -12.5` |
+| 扫描速度 | `U SCOPE_SPEED MAIN|SUB FAST|MID|SLOW` |
+| 视频带宽 | `U SCOPE_VBW MAIN|SUB NARROW|WIDE` |
+| 发射时显示频谱 | `U SCOPE_TX 0|1` |
+| 频谱中心频率定义 | `U SCOPE_CENTER_TYPE FILTER|CARRIER|ABS` |
+| 标记位置 | `U SCOPE_MARKER FILTER|CARRIER` |
+| 读取固定频谱边界 | `U SCOPE_READ_EDGE 2 1` |
+| 设置固定频谱边界（Hz） | `U SCOPE_FIXED_EDGE 2 1 435000000 436000000` |
 
 其中：
 
@@ -493,6 +506,26 @@ S 0 VFOB
 ```
 
 分别映射到 Duplex、Split 和 Simplex setup。
+
+
+### SkyRoof 频谱控制握手
+
+频谱数据流（TCP 4535）和普通 CAT 命令端口（默认 4534）相互独立。SkyRoof 的
+`Scope control path = SkyCAT` 必须连接 SkyCAT 普通 CAT 服务；启动时须指定
+`--model IC-9700`，并保持串口 CI-V 通路连接。切换频谱数据来源并不等于切换控制通道。
+
+`U SCOPE_READ` 从电台实时读取 MAIN/SUB 频谱状态，不返回伪造默认值，
+输出用分号分隔的字段，例如：
+
+```text
+SELECT=MAIN;MAIN.MODE=CENTER;MAIN.SPAN=25000;MAIN.EDGE=1;MAIN.REF=15.0;MAIN.SPEED=FAST;MAIN.VBW=WIDE;SUB.MODE=CENTER;SUB.SPAN=25000;SUB.EDGE=1;SUB.REF=15.0;SUB.SPEED=FAST;SUB.VBW=WIDE;TX=0;CENTER=FILTER;MARKER=FILTER
+```
+
+`U SCOPE_READ_EDGE 2 1` 返回真实固定边界：
+`RANGE=2;EDGE=1;LOWER=435000000;UPPER=436000000`。
+无效参数返回 `RPRT -1`，电台拒绝指令返回 `RPRT -9`，
+串口未连接返回 `RPRT -6`。发送队列接受命令不代表电台已接受写操作；
+必须以 CI-V FB 应答及再次读回为准。
 
 ## WSJT-X 兼容代理
 
