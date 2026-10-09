@@ -488,6 +488,42 @@ The main SkyCAT TCP server understands the following line-oriented commands:
 | enable_scope_data | `U SCOPE_DATA 1` |
 | disable_scope_data | `U SCOPE_DATA 0` |
 | IC-9700 scope sweep FAST | `U SCOPE_FAST 1` |
+| Read MAIN/SUB scope settings | `U SCOPE_READ` |
+| Select active scope | `U SCOPE_SELECT MAIN|SUB` |
+| Scope mode | `U SCOPE_MODE MAIN|SUB CENTER|FIXED|SCROLL-C|SCROLL-F` |
+| Center span (Hz) | `U SCOPE_SPAN MAIN|SUB 25000` |
+| Fixed edge slot | `U SCOPE_EDGE MAIN|SUB 1..4` |
+| Reference level (-20..20 dB, 0.5 dB steps) | `U SCOPE_REF MAIN|SUB -12.5` |
+| Sweep speed | `U SCOPE_SPEED MAIN|SUB FAST|MID|SLOW` |
+| Video bandwidth | `U SCOPE_VBW MAIN|SUB NARROW|WIDE` |
+| Scope during transmission | `U SCOPE_TX 0|1` |
+| Center frequency convention | `U SCOPE_CENTER_TYPE FILTER|CARRIER|ABS` |
+| Marker position | `U SCOPE_MARKER FILTER|CARRIER` |
+| Read stored fixed edges | `U SCOPE_READ_EDGE 2 1` |
+| Set stored fixed edges (Hz) | `U SCOPE_FIXED_EDGE 2 1 435000000 436000000` |
+
+
+### SkyRoof scope-control handshake
+
+The spectrum waveform stream (TCP 4535) and the CAT command port (default 4534)
+are separate endpoints. SkyRoof's `Scope control path = SkyCAT` requires the
+normal SkyCAT CAT port, with `--model IC-9700` and an active serial CI-V
+connection. Merely selecting a SkyCAT waveform source does not configure the
+control path.
+
+`U SCOPE_READ` queries the radio (not cached defaults) and returns a
+semicolon-separated record like:
+
+```text
+SELECT=MAIN;MAIN.MODE=CENTER;MAIN.SPAN=25000;MAIN.EDGE=1;MAIN.REF=15.0;MAIN.SPEED=FAST;MAIN.VBW=WIDE;SUB.MODE=CENTER;SUB.SPAN=25000;SUB.EDGE=1;SUB.REF=15.0;SUB.SPEED=FAST;SUB.VBW=WIDE;TX=0;CENTER=FILTER;MARKER=FILTER
+```
+
+`U SCOPE_READ_EDGE 2 1` replies with `RANGE=2;EDGE=1;LOWER=435000000;UPPER=436000000` using the radio's stored values.
+Invalid controls return `RPRT -1`, rejected CI-V writes `RPRT -9`,
+and a disconnected CAT transport `RPRT -6`. Scope writes require confirmed
+radio FB replies; a queued command is not evidence that the IC-9700 accepted it.
+Do not rely on initial readback before explicitly checking SkyCAT version and
+the serial CI-V link. The radio's 27 xx command availability may vary by firmware.
 
 **frequency** is in Hertz.
 
