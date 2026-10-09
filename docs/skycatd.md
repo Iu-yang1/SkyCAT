@@ -631,3 +631,45 @@ The scope stream is intended for live display rather than lossless capture.
 - The selected `--model` determines the available CAT commands and default serial speed.
 - Command availability may differ between Duplex, Split, and Simplex operating modes.
 - A connected program should not assume that every radio implements every command.
+
+
+### Dedicated IC-9700 Remote Control Switch endpoint
+
+SkyCAT provides a **separate loopback-only TCP service** on
+`127.0.0.1:4536` for the
+[IC-9700 Remote Control Switch](https://github.com/Iu-yang1/IC-9700-Remote-Control-Switch)
+application. Override with `--switch-port <1..65535>`; disable with
+`--no-switch-port`. This port is created only for radio model IC-9700 and
+cannot be enabled on a port already assigned to the main CAT, WSJT-X proxy
+or native scope stream.
+
+Each connection uses one ASCII line per transaction:
+
+| Request | Success reply | Meaning |
+|---|---|---|
+| `GET DATA_OFF` | `VALUE 05` | Read CI-V `1A 05 01 15` |
+| `SET DATA_OFF 05` | `OK` | Write DATA OFF input = LAN |
+| `GET DATA_MOD`, `SET DATA_MOD 03` | `VALUE 03`, `OK` | CI-V `1A 05 01 16` |
+| `GET USB_OUTPUT`, `SET USB_OUTPUT 01` | `VALUE 01`, `OK` | CI-V `1A 05 01 05` |
+| `GET COMP`, `SET COMP 01` | `VALUE 01`, `OK` | Speech COMP, CI-V `16 44` |
+| `GET COMP_LEVEL`, `SET COMP_LEVEL 0255` | `VALUE 0255`, `OK` | COMP level, CI-V `14 0E` |
+| `GET KEY_SPEED`, `SET KEY_SPEED 0128` | `VALUE 0128`, `OK` | CW speed, CI-V `14 0C` |
+| `GET RF_POWER`, `SET RF_POWER 0128` | `VALUE 0128`, `OK` | TX power, CI-V `14 0A` |
+| `GET SAT_MODE` | `VALUE 00` or `VALUE 01` | Read-only, CI-V `16 5A` |
+
+`VALUE` is uppercase packed CI-V **hexadecimal**, not a decimal
+normalized percentage. All writes return `OK` only after an ACK; errors
+return `ERR INVALID`, `ERR RADIO`, `ERR DISCONNECTED`, etc.
+
+**No arbitrary CI-V, VFO selection, frequency/mode changes, SAT writes
+or PTT are accepted.** The listener shares SkyCAT's exact
+`CatServer.commandLock` and physical CI-V port, so it does not start
+another radio session. A separate TCP port isolates *command
+permissions and client sessions*, not the physical radio's bandwidth
+or command latency. SkyRoof retains exclusive responsibility for
+satellite tracking and Doppler. This endpoint does not affect native
+scope performance and adds no spectrum diagnostics.
+
+The CI-V selectors and value ranges follow the Icom IC-9700 CI-V
+Reference Guide. In particular `14 0A/0C/0E` values are 2-byte
+BCD (0000..0255), and DATA OFF / DATA MOD are 00..05.

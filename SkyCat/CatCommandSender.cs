@@ -194,6 +194,67 @@ namespace SkyCat
 
 
     /// <summary>
+    /// IC-9700 auxiliary setting read for the dedicated Switch port only.
+    /// Replies must match the requested CI-V selector exactly, never a scope
+    /// waveform or another command's unsolicited response.
+    /// </summary>
+    public byte[] ReadIcomSwitchSetting(byte[] selector, int dataLength)
+    {
+      ValidateIcomScopeTransport();
+      if (selector.Length is < 2 or > 4 || dataLength is < 1 or > 2)
+        throw new ArgumentException("Invalid auxiliary CI-V selector/length.");
+      DumpUnexpectedBytes();
+      byte[] request = new byte[selector.Length + 5];
+      request[0] = 0xFE; request[1] = 0xFE;
+      request[2] = 0xA2; request[3] = 0xE0;
+      Array.Copy(selector, 0, request, 4, selector.Length);
+      request[^1] = 0xFD;
+      SerialPort.Write(request, 0, request.Length);
+      SkipEcho(request);
+
+      long deadline = Environment.TickCount64 + 1500;
+      while (Environment.TickCount64 < deadline)
+      {
+        byte[]? frame = ReceiveCivFrame(
+          (int)Math.Max(1, deadline - Environment.TickCount64));
+        if (frame == null) break;
+        if (frame.Length == 6 && frame[0] == 0xFE && frame[1] == 0xFE &&
+            frame[2] == 0xE0 && frame[3] == 0xA2 &&
+            frame[4] == 0xFA && frame[5] == 0xFD)
+          throw new InvalidReplyException("IC-9700 rejected auxiliary setting read.");
+
+        if (frame.Length != selector.Length + dataLength + 5 ||
+            frame[0] != 0xFE || frame[1] != 0xFE ||
+            frame[2] != 0xE0 || frame[3] != 0xA2 || frame[^1] != 0xFD ||
+            !frame.AsSpan(4, selector.Length).SequenceEqual(selector))
+          continue;
+
+        return frame.AsSpan(4 + selector.Length, dataLength).ToArray();
+      }
+      throw new TimeoutException("IC-9700 auxiliary CI-V readback timed out.");
+    }
+
+    public void WriteIcomSwitchSetting(byte[] selector, byte[] data)
+    {
+      ValidateIcomScopeTransport();
+      if (selector.Length is < 2 or > 4 || data.Length is < 1 or > 2)
+        throw new ArgumentException("Invalid auxiliary CI-V write.");
+      var command = new byte?[5 + selector.Length + data.Length];
+      command[0] = 0xFE; command[1] = 0xFE;
+      command[2] = 0xA2; command[3] = 0xE0;
+      for (int i = 0; i < selector.Length; i++)
+        command[i + 4] = selector[i];
+      for (int i = 0; i < data.Length; i++)
+        command[i + 4 + selector.Length] = data[i];
+      command[^1] = 0xFD;
+      _ = SendMessage(new CatMessage {
+        Command = command,
+        Reply = new byte?[] { 0xFE, 0xFE, 0xE0, 0xA2, 0xFB, 0xFD },
+        Comment = "IC-9700 dedicated auxiliary switch setting"
+      });
+    }
+
+    /// <summary>
     /// Change the hardware RF gain of the IC-9700 through its existing CAT
     /// transport. RS-BA1's *audio* gain is intentionally not controlled here.
     /// This method is invoked under CatServer.commandLock.
