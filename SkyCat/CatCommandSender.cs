@@ -194,6 +194,57 @@ namespace SkyCat
 
 
     /// <summary>
+    /// Change the hardware RF gain of the IC-9700 through its existing CAT
+    /// transport. RS-BA1's *audio* gain is intentionally not controlled here.
+    /// This method is invoked under CatServer.commandLock.
+    /// </summary>
+    public void SetIcomRfGain(int gain)
+    {
+      ValidateIcomScopeTransport();
+      byte[] command = IcomRfGainCodec.BuildWrite(gain);
+      _ = SendMessage(new CatMessage {
+        Command = command.Select(b => (byte?)b).ToArray(),
+        Reply = new byte?[] { 0xFE, 0xFE, 0xE0, 0xA2, 0xFB, 0xFD },
+        Comment = "IC-9700 RF gain 14 02"
+      });
+    }
+
+    /// <summary>Read the real RF gain register, without using cached values.</summary>
+    public int ReadIcomRfGain()
+    {
+      ValidateIcomScopeTransport();
+      DumpUnexpectedBytes();
+
+      byte[] query = IcomRfGainCodec.BuildRead();
+      SerialPort.Write(query, 0, query.Length);
+      SkipEcho(query);
+
+      long deadline = Environment.TickCount64 + 1500;
+      int skipped = 0;
+      while (Environment.TickCount64 < deadline)
+      {
+        byte[]? frame = ReceiveCivFrame(
+          (int)Math.Max(1, deadline - Environment.TickCount64));
+        if (frame == null)
+          break;
+
+        if (frame.SequenceEqual(
+              new byte[] { 0xFE, 0xFE, 0xE0, 0xA2, 0xFA, 0xFD }))
+          throw new InvalidReplyException("IC-9700 rejected RF gain read.");
+
+        if (IcomRfGainCodec.TryExtractReadReply(frame, out int gain))
+          return gain;
+
+        // The 27 00 waveform is already forwarded to ScopeTap by
+        // ReceiveCivFrame; never treat it as a gain reply.
+        skipped++;
+      }
+
+      throw new TimeoutException(
+        $"No IC-9700 14 02 RF gain readback ({skipped} unrelated frames).");
+    }
+
+    /// <summary>
     /// Execute an IC-9700 CI-V 27 xx scope write under CatServer's shared
     /// command lock. The built-in CI-V receive path filters unsolicited
     /// waveform 27 00 frames while awaiting a radio FB/FA acknowledgement.
