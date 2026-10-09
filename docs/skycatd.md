@@ -636,12 +636,14 @@ The scope stream is intended for live display rather than lossless capture.
 ### Dedicated IC-9700 Remote Control Switch endpoint
 
 SkyCAT provides a **separate loopback-only TCP service** on
-`127.0.0.1:4536` for the
+`127.0.0.1:4537` for the
 [IC-9700 Remote Control Switch](https://github.com/Iu-yang1/IC-9700-Remote-Control-Switch)
 application. Override with `--switch-port <1..65535>`; disable with
 `--no-switch-port`. This port is created only for radio model IC-9700 and
 cannot be enabled on a port already assigned to the main CAT, WSJT-X proxy
 or native scope stream.
+
+The dedicated client can verify the service without radio I/O using `PING` → `PONG`.
 
 Each connection uses one ASCII line per transaction:
 
