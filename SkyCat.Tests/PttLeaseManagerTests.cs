@@ -70,6 +70,30 @@ public sealed class PttLeaseManagerTests
   }
 
   [Fact]
+  public void OrphanedLeaseRecoversWhenNextConnectedClientRequestsPtt()
+  {
+    List<string> writes = new();
+    bool portReady = false;
+    string Radio(string cmd)
+    {
+      writes.Add(cmd);
+      if (cmd == "T 1") return "RPRT 0";
+      return portReady ? "RPRT 0" : "RPRT -6";
+    }
+
+    var shared = new PttLeaseManager(Radio);
+    var oldClient = new PttCommandSession(Radio, sharedLease: shared);
+    var newClient = new PttCommandSession(Radio, sharedLease: shared);
+    Assert.Equal("RPRT 0", oldClient.Execute("T 1"));
+    oldClient.EnsurePttOff(); // COM port went away, OFF cannot be confirmed
+    Assert.Equal("RPRT -6", newClient.Execute("T 1"));
+
+    portReady = true; // a new control session finished its setup
+    Assert.Equal("RPRT 0", newClient.Execute("T 1"));
+    Assert.Equal(new[] { "T 1", "T 0", "T 0", "T 0", "T 1" }, writes);
+  }
+
+  [Fact]
   public void DefiniteNackDoesNotLeaveGhostLease()
   {
     string Radio(string command) =>
