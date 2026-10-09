@@ -109,6 +109,7 @@ namespace skycatd
           return;
         Owner = null;
         MayBeKeyed = false;
+        Orphaned = false;
       }
       catch
       {
