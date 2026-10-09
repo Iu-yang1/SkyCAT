@@ -586,9 +586,12 @@ SkyCAT 从共享串口 CI-V 数据流中提取完整的 IC-9700 `27 00` waveform
 ### IC-9700 Remote Control Switch 专用 TCP 端口
 
 SkyCAT 为 Remote Control Switch 新增仅监听本机的
-`127.0.0.1:4536` TCP 接口。通过 `--switch-port` 修改端口；
+`127.0.0.1:4537` TCP 接口。通过 `--switch-port` 修改端口；
 通过 `--no-switch-port` 关闭。仅在电台型号为 IC-9700 时启动，
 并禁止与 CAT/WSJT-X/频谱端口重号。
+
+可以先发送不访问电台的 `PING`，服务直接返回 `PONG`，
+避免在连接握手阶段等待串口应答。
 
 协议为逐行 ASCII：`GET DATA_OFF` 返回 `VALUE 05`；
 `SET DATA_OFF 05` 成功返回 `OK`。其他允许的名称包括
