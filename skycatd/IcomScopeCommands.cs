@@ -40,28 +40,34 @@ namespace skycatd
         sender.WriteIcomScope(command, payload);
         return "RPRT 0";
       }
-      catch (ArgumentException)
+      catch (ArgumentException ex)
       {
+        sender.Log?.LogWarning("Invalid SkyRoof scope request: {Error}", ex.Message);
         return "RPRT -1";
       }
-      catch (InvalidReplyException)
+      catch (InvalidReplyException ex)
       {
+        sender.Log?.LogWarning("IC-9700 rejected scope command: {Error}", ex.Message);
         return "RPRT -9";
       }
-      catch (TimeoutException)
+      catch (TimeoutException ex)
       {
+        sender.Log?.LogWarning("IC-9700 scope readback timed out: {Error}", ex.Message);
         return "RPRT -5";
       }
-      catch (InvalidOperationException)
+      catch (InvalidOperationException ex)
       {
+        sender.Log?.LogWarning("IC-9700 scope command unavailable: {Error}", ex.Message);
         return "RPRT -6";
       }
-      catch (NotSupportedException)
+      catch (NotSupportedException ex)
       {
+        sender.Log?.LogWarning("IC-9700 scope command not supported: {Error}", ex.Message);
         return "RPRT -11";
       }
-      catch (FormatException)
+      catch (FormatException ex)
       {
+        sender.Log?.LogWarning("Malformed IC-9700 scope data: {Error}", ex.Message);
         return "RPRT -9";
       }
       catch (Exception ex)
