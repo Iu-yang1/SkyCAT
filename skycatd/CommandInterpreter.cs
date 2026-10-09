@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.Logging;
+using System.Globalization;
 using Serilog.Core;
 using SkyCat;
 namespace skycatd
@@ -28,8 +29,8 @@ namespace skycatd
         "m" => CmdM(),
         "x" => CmdX(),
         "t" => CmdT(),
-        "F" when args.Length == 2 && int.TryParse(args[1], out var fInt) => CmdFInt(fInt),
-        "I" when args.Length == 2 && int.TryParse(args[1], out var iInt) => CmdIInt(iInt),
+        "F" when args.Length == 2 && long.TryParse(args[1], NumberStyles.None, CultureInfo.InvariantCulture, out var fHz) => CmdFInt(fHz),
+        "I" when args.Length == 2 && long.TryParse(args[1], NumberStyles.None, CultureInfo.InvariantCulture, out var iHz) => CmdIInt(iHz),
         "M" when args.Length == 3 && int.TryParse(args[2], out var mZero) => CmdMStr0(args[1], mZero),
         "X" when args.Length == 3 && int.TryParse(args[2], out var xZero) => CmdXStr0(args[1], xZero),
         "T" when args.Length == 2 && (args[1] == "0") => CmdT0("OFF"),
@@ -82,8 +83,8 @@ namespace skycatd
     private string CmdM() => SendCommandIfAvailable(CatCommand.read_rx_mode);
     private string CmdX() => SendCommandIfAvailable(CatCommand.read_tx_mode);
     private string CmdT() => SendCommandIfAvailable(CatCommand.read_ptt);
-    private string CmdFInt(int value) => SendCommandIfAvailable(CatCommand.write_rx_frequency, value.ToString());
-    private string CmdIInt(int value) => SendCommandIfAvailable(CatCommand.write_tx_frequency, value.ToString());
+    private string CmdFInt(long value) => SendCommandIfAvailable(CatCommand.write_rx_frequency, value.ToString());
+    private string CmdIInt(long value) => SendCommandIfAvailable(CatCommand.write_tx_frequency, value.ToString());
     private string CmdMStr0(string str, int zero) => SendCommandIfAvailable(CatCommand.write_rx_mode, str);
     private string CmdXStr0(string str, int zero) => SendCommandIfAvailable(CatCommand.write_tx_mode, str);
     private string CmdT0(string value) => SendCommandIfAvailable(CatCommand.write_ptt_off, value);
