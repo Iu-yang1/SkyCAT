@@ -155,6 +155,76 @@ namespace SkyCat
 
 
 
+    public void SendIcomCwMessage(
+      string text)
+    {
+      ValidateIcom9700CwTransport();
+
+      byte[] command =
+        IcomCwMessageCodec.BuildSendFrame(
+          text);
+
+      _ = SendMessage(
+        new CatMessage
+        {
+          Command =
+            command
+              .Select(value =>
+                (byte?)value)
+              .ToArray(),
+          Reply =
+          [
+            0xFE, 0xFE,
+            0xE0, 0xA2,
+            0xFB, 0xFD
+          ],
+          Comment =
+            $"IC-9700 CW message ({text.Length} char)"
+        });
+    }
+
+    public void AbortIcomCwMessage()
+    {
+      ValidateIcom9700CwTransport();
+
+      byte[] command =
+        IcomCwMessageCodec
+          .BuildAbortFrame();
+
+      _ = SendMessage(
+        new CatMessage
+        {
+          Command =
+            command
+              .Select(value =>
+                (byte?)value)
+              .ToArray(),
+          Reply =
+          [
+            0xFE, 0xFE,
+            0xE0, 0xA2,
+            0xFB, 0xFD
+          ],
+          Comment =
+            "IC-9700 CW message abort"
+        });
+    }
+
+    private void ValidateIcom9700CwTransport()
+    {
+      if (!string.Equals(
+            RadioName,
+            "IC-9700",
+            StringComparison.OrdinalIgnoreCase))
+        throw new NotSupportedException(
+          "CW message control is only implemented for IC-9700.");
+
+      if (!SerialPort.IsOpen)
+        throw new InvalidOperationException(
+          "SkyCAT serial CAT port is not connected.");
+    }
+
+
     public void SetIcomScopeSweepFast()
     {
       if (!SerialPort.IsOpen)
