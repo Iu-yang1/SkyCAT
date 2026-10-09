@@ -16,6 +16,10 @@ namespace skycatd
       private readonly CancellationTokenSource Cancellation = new();
       private Task? SenderTask;
       private int Disposed;
+      private long SentChunks;
+      private long DroppedChunks;
+      internal long Sent => Interlocked.Read(ref SentChunks);
+      internal long Dropped => Interlocked.Read(ref DroppedChunks);
 
       internal ScopeClient(TcpClient client)
       {
@@ -24,15 +28,21 @@ namespace skycatd
         Stream = client.GetStream();
 
         // Scope is a live display, not a lossless recording stream. Keep only a
-        // few recent frames so a paused/non-reading client can never backpressure
-        // the serial CI-V parser or the shared CAT command lock.
+        // bounded recent data so a slow TCP client cannot backpressure
+        // the CI-V parser or the shared CAT command lock.
+        // IC-9700 emits a sweep as up to 11 distinct 27 00 CI-V
+        // chunks. A three-*chunk* buffer dropped parts of the same sweep
+        // during brief network scheduling stalls, forcing the SkyRoof
+        // assembler to discard incomplete sweeps. Keep several complete
+        // sweeps of headroom while remaining strictly bounded.
         Frames = Channel.CreateBounded<byte[]>(
-          new BoundedChannelOptions(3)
+          new BoundedChannelOptions(64)
           {
             SingleReader = true,
             SingleWriter = false,
             FullMode = BoundedChannelFullMode.DropOldest
-          });
+          },
+          _ => Interlocked.Increment(ref DroppedChunks));
       }
 
       internal void Start(Action<Exception?> disconnected)
@@ -62,6 +72,7 @@ namespace skycatd
 
             await Stream.WriteAsync(header, Cancellation.Token);
             await Stream.WriteAsync(frame, Cancellation.Token);
+            Interlocked.Increment(ref SentChunks);
           }
         }
         catch (OperationCanceledException)
@@ -95,6 +106,21 @@ namespace skycatd
     private TcpListener? Listener;
     private readonly ConcurrentDictionary<int, ScopeClient> Clients = new();
     private int NextClientId;
+    private long InputChunks;
+    private long HistoricalSent;
+    private long HistoricalDropped;
+
+    internal (long Input, long Sent, long Dropped, int Clients) GetDiagnostics()
+    {
+      long sent = Interlocked.Read(ref HistoricalSent);
+      long dropped = Interlocked.Read(ref HistoricalDropped);
+      foreach (ScopeClient client in Clients.Values)
+      {
+        sent += client.Sent;
+        dropped += client.Dropped;
+      }
+      return (Interlocked.Read(ref InputChunks), sent, dropped, Clients.Count);
+    }
 
     internal ScopeStreamServer(int port, ILogger logger)
     {
@@ -153,7 +179,10 @@ namespace skycatd
 
     internal void Publish(byte[] frame)
     {
-      if (frame == null || frame.Length == 0 || Clients.IsEmpty)
+      if (frame == null || frame.Length == 0)
+        return;
+      Interlocked.Increment(ref InputChunks);
+      if (Clients.IsEmpty)
         return;
 
       // Never perform socket I/O on the serial/CAT thread. Each client has a
@@ -169,6 +198,8 @@ namespace skycatd
       if (!Clients.TryRemove(id, out ScopeClient? client))
         return;
 
+      Interlocked.Add(ref HistoricalSent, client.Sent);
+      Interlocked.Add(ref HistoricalDropped, client.Dropped);
       client.Dispose();
 
       if (error != null)
