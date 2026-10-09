@@ -28,7 +28,8 @@ public sealed class ScopeStreamServerTests
       byte[][] chunks = Enumerable.Range(1, 11)
         .Select(sequence => new byte[] {
           0xFE, 0xFE, 0xE0, 0xA2, 0x27, 0x00,
-          0x00, (byte)sequence, 0x11, 0xFD
+          0x00, (byte)(((sequence / 10) << 4) | (sequence % 10)),
+          0x11, 0xFD
         }).ToArray();
 
       foreach (byte[] chunk in chunks)
@@ -55,6 +56,9 @@ public sealed class ScopeStreamServerTests
       Assert.Equal(11, snapshot.Input);
       Assert.Equal(22, snapshot.Sent);
       Assert.Equal(0, snapshot.Dropped);
+      Assert.Equal(1, snapshot.CompleteSweeps);
+      Assert.Equal(0, snapshot.IncompleteSweeps);
+      Assert.Equal(0, snapshot.InvalidChunks);
     }
     finally
     {
