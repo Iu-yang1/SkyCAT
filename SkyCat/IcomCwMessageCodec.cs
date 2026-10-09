@@ -149,7 +149,7 @@ namespace SkyCat
         result.Add(value);
 
       foreach (char value in
-        " /?.-,:\'()=+\"@")
+        " /?.-,:'()=+\"@")
         result.Add((byte)value);
 
       return result;
