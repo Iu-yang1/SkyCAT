@@ -54,7 +54,7 @@ namespace skycatd
 
           // A definite radio rejection cannot key it. For an ambiguous
           // timeout/I/O failure, attempt an immediate fail-safe OFF.
-          if (reply == "RPRT -9")
+          if (reply is "RPRT -9" or "RPRT -11" or "RPRT -1")
           {
             Owner = null;
             MayBeKeyed = false;
