@@ -13,7 +13,10 @@ namespace skycatd;
 /// </summary>
 public sealed class IcomCwKeyerLeaseManager
 {
-  private readonly CatCommandSender Sender;
+  private readonly Func<CatCommandSet.CatCommand, string?> SendCat;
+  private readonly Func<int> ReadBreakIn;
+  private readonly Action<string> SendCw;
+  private readonly Action StopCw;
   private readonly PttLeaseManager PttLease;
   private readonly ILogger? Logger;
   private readonly object Sync = new();
@@ -27,8 +30,38 @@ public sealed class IcomCwKeyerLeaseManager
     PttLeaseManager pttLease,
     ILogger? logger = null)
   {
-    Sender = sender ??
-      throw new ArgumentNullException(nameof(sender));
+    ArgumentNullException.ThrowIfNull(sender);
+
+    SendCat =
+      command =>
+        sender.SendCommand(command);
+    ReadBreakIn =
+      sender.ReadIcomBreakInMode;
+    SendCw =
+      sender.SendIcomCwMessage;
+    StopCw =
+      sender.StopIcomCwMessage;
+    PttLease = pttLease ??
+      throw new ArgumentNullException(nameof(pttLease));
+    Logger = logger;
+  }
+
+  public IcomCwKeyerLeaseManager(
+    Func<CatCommandSet.CatCommand, string?> sendCat,
+    Func<int> readBreakIn,
+    Action<string> sendCw,
+    Action stopCw,
+    PttLeaseManager pttLease,
+    ILogger? logger = null)
+  {
+    SendCat = sendCat ??
+      throw new ArgumentNullException(nameof(sendCat));
+    ReadBreakIn = readBreakIn ??
+      throw new ArgumentNullException(nameof(readBreakIn));
+    SendCw = sendCw ??
+      throw new ArgumentNullException(nameof(sendCw));
+    StopCw = stopCw ??
+      throw new ArgumentNullException(nameof(stopCw));
     PttLease = pttLease ??
       throw new ArgumentNullException(nameof(pttLease));
     Logger = logger;
@@ -78,15 +111,15 @@ public sealed class IcomCwKeyerLeaseManager
       try
       {
         string mode =
-          Sender.SendCommand(
+          SendCat(
             CatCommandSet.CatCommand.read_tx_mode)
           ?? "?";
 
         int breakIn =
-          Sender.ReadIcomBreakInMode();
+          ReadBreakIn();
 
         string tx =
-          Sender.SendCommand(
+          SendCat(
             CatCommandSet.CatCommand.read_ptt)
           ?? "?";
 
@@ -131,7 +164,7 @@ public sealed class IcomCwKeyerLeaseManager
       try
       {
         string mode =
-          Sender.SendCommand(
+          SendCat(
             CatCommandSet.CatCommand.read_tx_mode)
           ?? string.Empty;
 
@@ -143,7 +176,7 @@ public sealed class IcomCwKeyerLeaseManager
         }
 
         int breakIn =
-          Sender.ReadIcomBreakInMode();
+          ReadBreakIn();
 
         if (breakIn == 0)
         {
@@ -153,7 +186,7 @@ public sealed class IcomCwKeyerLeaseManager
         }
 
         string ptt =
-          Sender.SendCommand(
+          SendCat(
             CatCommandSet.CatCommand.read_ptt)
           ?? "1";
 
@@ -172,7 +205,7 @@ public sealed class IcomCwKeyerLeaseManager
         MayBeSending = true;
         Orphaned = false;
 
-        Sender.SendIcomCwMessage(text);
+        SendCw(text);
         return "OK";
       }
       catch (Exception ex)
@@ -204,7 +237,7 @@ public sealed class IcomCwKeyerLeaseManager
 
       try
       {
-        Sender.StopIcomCwMessage();
+        StopCw();
         ClearOwner(client);
         return "OK";
       }
@@ -267,7 +300,7 @@ public sealed class IcomCwKeyerLeaseManager
 
     try
     {
-      Sender.StopIcomCwMessage();
+      StopCw();
       ClearOwner(owner);
     }
     catch (Exception ex)
