@@ -581,3 +581,27 @@ SkyCAT 从共享串口 CI-V 数据流中提取完整的 IC-9700 `27 00` waveform
 - Duplex、Split、Simplex 下可用的命令可能不同；
 - 客户端不应假设所有电台都支持所有 CAT 命令；
 - 使用 IC-9700 + SkyRoof 时，通常保持默认 4532 / 4534 / 4535 即可。
+
+
+### IC-9700 Remote Control Switch 专用 TCP 端口
+
+SkyCAT 为 Remote Control Switch 新增仅监听本机的
+`127.0.0.1:4536` TCP 接口。通过 `--switch-port` 修改端口；
+通过 `--no-switch-port` 关闭。仅在电台型号为 IC-9700 时启动，
+并禁止与 CAT/WSJT-X/频谱端口重号。
+
+协议为逐行 ASCII：`GET DATA_OFF` 返回 `VALUE 05`；
+`SET DATA_OFF 05` 成功返回 `OK`。其他允许的名称包括
+`DATA_MOD`、`USB_OUTPUT`、`COMP`、`COMP_LEVEL`、
+`KEY_SPEED`、`RF_POWER`；`SAT_MODE` **只允许读取**。
+
+使用 IC-9700 官方 CI-V 选择器 `1A 05 01 15/16/05`、
+`16 44`、`14 0E/0C/0A`、`16 5A`。
+数据值保留原始十六进制形式；`14` 的数值为两字节 BCD
+`0000..0255`，不直接传十进制百分比。
+
+专用端口**不提供原始 CI-V 透传**，拒绝 PTT、VFO/MAIN/SUB
+切换、卫星模式写入、频率及工作模式修改。所有命令共享 SkyCAT
+原有的串口命令锁，不额外连接电台或占用 COM。
+SkyRoof 继续负责卫星跟踪及多普勒，RS-BA1 配置不变。
+分开的 TCP 端口并不代表拥有独立的硬件控制链路。
