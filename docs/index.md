@@ -60,10 +60,11 @@ releases contain them.
 
 This fork's documentation is published at
 **[iu-yang1.github.io/SkyCAT](https://iu-yang1.github.io/SkyCAT/)**.
-See the **[GitHub Deployments](https://github.com/Iu-yang1/SkyCAT/deployments)**
-page and choose the `github-pages` environment for the published URL and
-history. The existing native GitHub Pages build performs the publication;
-a separate build workflow is not necessary.
+View the [native Pages publishing history](https://github.com/Iu-yang1/SkyCAT/actions)
+and the [verified documentation Deployment workflow](https://github.com/Iu-yang1/SkyCAT/actions/workflows/pages-deployment-visibility.yml).
+The verifier records a `documentation` environment and public site URL after
+the native Pages build; it **does not publish a second site**. The Actions
+links remain usable if GitHub's Deployments dashboard is unavailable.
 
 ## See Also
 
