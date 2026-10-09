@@ -12,7 +12,13 @@ nav_order: 6
 
 [SkyCAT — Iu-yang1/SkyCAT](https://github.com/Iu-yang1/SkyCAT)
 
-可以从仓库的 **Actions** 或后续发布的 **Releases** 中获取 Windows 构建。
+可以从 [Actions](https://github.com/Iu-yang1/SkyCAT/actions)
+或 [Releases](https://github.com/Iu-yang1/SkyCAT/releases) 中获取 Windows 构建。
+已成功的 Windows 工作流通常会提供 `skycatd-wsjtx-win-x64`
+测试构建产物，实际下载时请以对应 Action 为准。
+
+使用包含 Switch **4537** 端口的新版本前，请参阅
+[SkyCAT / RS-BA1 / SkyRoof / Remote Control Switch 并行使用指南](skycatd.md#ic-9700-remote-control-switch-集成)。
 
 上游 SkyCAT 的正式发布页面：
 
