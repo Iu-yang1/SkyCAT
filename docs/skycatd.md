@@ -11,10 +11,11 @@ nav_order: 3
 **skycatd.exe** is a command-line application based on the SkyCAT library. It connects to a
 radio through a serial port and exposes CAT control over TCP.
 
-This fork also provides two additional loopback-only services:
+This fork also provides three additional loopback-only services:
 
 - a restricted Hamlib NET rigctl compatibility endpoint for WSJT-X;
-- a binary IC-9700 scope-frame stream for SkyRoof.
+- a binary IC-9700 scope-frame stream for SkyRoof;
+- a restricted IC-9700 auxiliary-settings API for Remote Control Switch.
 
 ## Installation
 
@@ -70,6 +71,7 @@ With the default options, skycatd opens the following listeners:
 | Main SkyCAT CAT server | `127.0.0.1` | 4532 |
 | WSJT-X compatibility proxy | `127.0.0.1` | 4534 |
 | IC-9700 scope stream | `127.0.0.1` | 4535 |
+| IC-9700 Remote Control Switch | `127.0.0.1` | 4537 |
 
 The main CAT server is loopback-only by default. It listens on all interfaces only when
 `--allow-remote` is explicitly specified.
@@ -177,8 +179,8 @@ the main CAT server listens on:
 0.0.0.0:4532
 ```
 
-This option affects only the main CAT listener. The WSJT-X proxy and scope stream remain
-loopback-only.
+This option affects only the main CAT listener. The WSJT-X proxy, scope stream,
+and Switch auxiliary endpoint remain loopback-only.
 
 > The main CAT TCP protocol does not provide TLS or user authentication. Do not expose it
 > directly to the public Internet. For remote operation, use a trusted LAN, firewall rules,
@@ -233,6 +235,27 @@ Each scope message on this port consists of:
 2. the raw CI-V frame of that length.
 
 This port is binary and must not be used as a rigctl or normal CAT text endpoint.
+
+### `--switch-port <port>`
+
+Optional. Default: **4537**.
+
+Sets the TCP port of the **IC-9700-only**, loopback-only Remote Control Switch
+auxiliary-settings service. This is **not** a rigctl or raw CI-V port.
+
+```bash
+skycatd.exe -m IC-9700 -r COM9 --switch-port 4537
+```
+
+If another local process occupies that port, choose a different unused port
+and change **both** this argument and the address in Remote Control Switch.
+
+### `--no-switch-port`
+
+Optional. Default: **off**.
+
+Disables the dedicated auxiliary-settings listener. The CAT, WSJT-X and scope
+services remain available (subject to their own options).
 
 ### `-v, --verbose`
 
@@ -319,11 +342,15 @@ skycatd.exe --version
 
 All TCP ports must be in the range **1-65535**.
 
-When the WSJT-X proxy is enabled, the following ports must all be different:
+Active listeners must use distinct TCP ports:
 
 - main CAT port (`--port`);
-- WSJT-X proxy port (`--wsjtx-port`);
-- scope stream port (`--scope-port`).
+- WSJT-X proxy port (`--wsjtx-port`) unless disabled;
+- scope stream port (`--scope-port`);
+- IC-9700 Switch port (`--switch-port`) unless disabled.
+
+SkyCAT validates these conflicts between its **own configured endpoints**.
+It cannot reserve a port already owned by an unrelated Windows process.
 
 For example, this is invalid:
 
@@ -331,8 +358,9 @@ For example, this is invalid:
 skycatd.exe -m IC-9700 -r COM9 -t 4534 --wsjtx-port 4534
 ```
 
-If the WSJT-X proxy is disabled, its configured port no longer conflicts with the main CAT
-server, but the main CAT port and scope port must still be different.
+If a proxy is disabled, its configured port is not active. The main CAT and
+scope ports always remain distinct; an enabled Switch port must also differ
+from every active SkyCAT endpoint.
 
 ## Supported Radios
 
@@ -373,6 +401,7 @@ This provides:
 SkyRoof CAT:     127.0.0.1:4532
 WSJT-X proxy:    127.0.0.1:4534
 Scope stream:    127.0.0.1:4535
+Switch auxiliary: 127.0.0.1:4537
 ```
 
 If the radio uses a different COM port:
@@ -415,7 +444,7 @@ skycatd.exe -m IC-9700 -r COM9 --allow-remote
 If Windows Firewall prompts for access, allow only the network profiles that are actually
 required.
 
-The WSJT-X and scope ports remain local to the skycatd computer.
+The WSJT-X, scope and Switch ports remain local to the skycatd computer.
 
 ### Custom TCP ports
 
@@ -423,8 +452,11 @@ The WSJT-X and scope ports remain local to the skycatd computer.
 skycatd.exe -m IC-9700 -r COM9 \
   --port 4600 \
   --wsjtx-port 4601 \
-  --scope-port 4602
+  --scope-port 4602 \
+  --switch-port 4603
 ```
+
+Use the same customized endpoints in the corresponding client programs.
 
 ### Disable WSJT-X integration
 
@@ -534,7 +566,7 @@ supports 2.4 GHz but is not sufficient for every 10 GHz setting.
 
 ### SkyRoof scope-control handshake
 
-The spectrum waveform stream (TCP 4535) and the CAT command port (default 4534)
+The spectrum waveform stream (TCP 4535) and the CAT command port (default 4532)
 are separate endpoints. SkyRoof's `Scope control path = SkyCAT` requires the
 normal SkyCAT CAT port, with `--model IC-9700` and an active serial CI-V
 connection. Merely selecting a SkyCAT waveform source does not configure the
@@ -627,51 +659,118 @@ The scope stream is intended for live display rather than lossless capture.
 ## Notes
 
 - The main CAT server defaults to loopback-only for safety.
-- `--allow-remote` does not expose the WSJT-X or scope listeners.
+- `--allow-remote` does not expose the WSJT-X, scope or Switch listeners.
 - The selected `--model` determines the available CAT commands and default serial speed.
 - Command availability may differ between Duplex, Split, and Simplex operating modes.
 - A connected program should not assume that every radio implements every command.
 
 
-### Dedicated IC-9700 Remote Control Switch endpoint
+## IC-9700 Remote Control Switch integration
 
-SkyCAT provides a **separate loopback-only TCP service** on
-`127.0.0.1:4537` for the
-[IC-9700 Remote Control Switch](https://github.com/Iu-yang1/IC-9700-Remote-Control-Switch)
-application. Override with `--switch-port <1..65535>`; disable with
-`--no-switch-port`. This port is created only for radio model IC-9700 and
-cannot be enabled on a port already assigned to the main CAT, WSJT-X proxy
-or native scope stream.
+The [Remote Control Switch fork](https://github.com/Iu-yang1/IC-9700-Remote-Control-Switch)
+supports an optional **SkyCAT TCP** transport. The default endpoint is
+**`127.0.0.1:4537`**. This endpoint is available **only** when SkyCAT is
+started with the `IC-9700` radio model; other models do not create it.
 
-The dedicated client can verify the service without radio I/O using `PING` → `PONG`.
+### Using RS-BA1, SkyRoof and Remote Control Switch together
 
-Each connection uses one ASCII line per transaction:
+1. Start **RS-BA1 Remote Utility** and connect to the radio via its usual LAN
+   session. Keep the existing RS-BA1 virtual COM port. If SkyCAT is already
+   running, do not start a second copy against that port.
+2. Start SkyCAT using the existing COM assigned to it, for example:
+   ```powershell
+   skycatd.exe -m IC-9700 -r COM9 -s 115200
+   ```
+   SkyCAT owns this **one** CI-V serial connection and publishes the four
+   separate localhost TCP listeners: 4532 / 4534 / 4535 / **4537**.
+3. Connect **SkyRoof CAT** to `127.0.0.1:4532`. Its satellite frequency,
+   mode, Doppler and PTT control remains on the normal SkyCAT interface.
+   SkyRoof can independently use its configured RS-BA1 passive LAN spectrum
+   source or the SkyCAT binary scope stream on 4535.
+4. In **Remote Control Switch → Connection settings**, choose **SkyCAT TCP**,
+   enter `127.0.0.1:4537`, save the profile and then click **Connect**.
+   This application does **not** open the same virtual COM port.
 
-| Request | Success reply | Meaning |
-|---|---|---|
-| `GET DATA_OFF` | `VALUE 05` | Read CI-V `1A 05 01 15` |
-| `SET DATA_OFF 05` | `OK` | Write DATA OFF input = LAN |
-| `GET DATA_MOD`, `SET DATA_MOD 03` | `VALUE 03`, `OK` | CI-V `1A 05 01 16` |
-| `GET USB_OUTPUT`, `SET USB_OUTPUT 01` | `VALUE 01`, `OK` | CI-V `1A 05 01 05` |
-| `GET COMP`, `SET COMP 01` | `VALUE 01`, `OK` | Speech COMP, CI-V `16 44` |
-| `GET COMP_LEVEL`, `SET COMP_LEVEL 0255` | `VALUE 0255`, `OK` | COMP level, CI-V `14 0E` |
-| `GET KEY_SPEED`, `SET KEY_SPEED 0128` | `VALUE 0128`, `OK` | CW speed, CI-V `14 0C` |
-| `GET RF_POWER`, `SET RF_POWER 0128` | `VALUE 0128`, `OK` | TX power, CI-V `14 0A` |
-| `GET SAT_MODE` | `VALUE 00` or `VALUE 01` | Read-only, CI-V `16 5A` |
+The connection profile is saved by **Remote Control Switch**, not by SkyCAT.
+Changing a radio setting sends a command immediately; saving the TCP address
+does not write anything to the radio. The client can read current radio state
+after connecting, so individual control readbacks may still take time.
 
-`VALUE` is uppercase packed CI-V **hexadecimal**, not a decimal
-normalized percentage. All writes return `OK` only after an ACK; errors
-return `ERR INVALID`, `ERR RADIO`, `ERR DISCONNECTED`, etc.
+Both applications ultimately share the **same CI-V serial link**. The
+dedicated Switch listener shares SkyCAT's `CatServer.commandLock`, so requests
+are serialized rather than concurrently stealing serial replies. Different TCP
+ports provide client and command **isolation**, not independent radio bandwidth.
+The Switch endpoint forbids SAT-mode writes, VFO selection, frequency/mode
+changes, arbitrary CI-V frames and PTT; let SkyRoof own those operations.
 
-**No arbitrary CI-V, VFO selection, frequency/mode changes, SAT writes
-or PTT are accepted.** The listener shares SkyCAT's exact
-`CatServer.commandLock` and physical CI-V port, so it does not start
-another radio session. A separate TCP port isolates *command
-permissions and client sessions*, not the physical radio's bandwidth
-or command latency. SkyRoof retains exclusive responsibility for
-satellite tracking and Doppler. This endpoint does not affect native
-scope performance and adds no spectrum diagnostics.
+### Dedicated Switch protocol (TCP 4537)
 
-The CI-V selectors and value ranges follow the Icom IC-9700 CI-V
-Reference Guide. In particular `14 0A/0C/0E` values are 2-byte
-BCD (0000..0255), and DATA OFF / DATA MOD are 00..05.
+**Line-oriented ASCII**. Terminate each request with a newline (`\n`).
+One response line is returned per request. It is **not** the binary scope
+stream or Hamlib rigctl. The initial `PING` → `PONG` handshake does not
+perform radio CI-V I/O, but can still wait briefly for the shared command lock.
+
+```text
+PING
+PONG
+GET DATA_OFF
+VALUE 05
+SET DATA_OFF 05
+OK
+```
+
+| Setting | Supported requests | CI-V selector | Encoding |
+|---|---|---|---|
+| DATA OFF input | `GET DATA_OFF`, `SET DATA_OFF 05` | `1A 05 01 15` | 1 byte, `00..05` |
+| DATA ON input | `GET DATA_MOD`, `SET DATA_MOD 03` | `1A 05 01 16` | 1 byte, `00..05` |
+| USB AF/IF output | `GET USB_OUTPUT`, `SET USB_OUTPUT 01` | `1A 05 01 05` | `00` AF / `01` IF |
+| Speech compressor | `GET COMP`, `SET COMP 01` | `16 44` | `00` off / `01` on |
+| Compressor level | `GET COMP_LEVEL`, `SET COMP_LEVEL 0128` | `14 0E` | Two-byte BCD, `0000..0255` |
+| CW keying speed | `GET KEY_SPEED`, `SET KEY_SPEED 0128` | `14 0C` | Two-byte BCD, `0000..0255` |
+| RF power | `GET RF_POWER`, `SET RF_POWER 0128` | `14 0A` | Two-byte BCD, `0000..0255` |
+| SAT mode | `GET SAT_MODE` | `16 5A` | Read-only, `00` / `01` |
+
+For DATA OFF/DATA MOD: `00` MIC, `01` ACC, `02` MIC+ACC,
+`03` USB, `04` MIC+USB and `05` LAN. `GET` succeeds with
+`VALUE <HEX>` (uppercase hexadecimal **CI-V bytes**, not a human-readable
+percentage). `SET` succeeds with `OK` only after a confirmed CI-V ACK;
+otherwise the endpoint returns `ERR INVALID`, `ERR DISCONNECTED`,
+`ERR TIMEOUT`, `ERR RADIO` or `ERR UNSUPPORTED`.
+
+The CI-V selectors and BCD encoding follow the IC-9700 CI-V Reference Guide
+and the existing Remote Control Switch implementation. SkyCAT deliberately
+does **not** expose a raw CI-V passthrough through this auxiliary endpoint.
+
+### Troubleshooting on Windows
+
+If SkyCAT reports **`Switch TCP listener error`** with Windows socket
+error **10048** ("only one usage of each socket address"), check which
+process owns the listening port:
+
+```powershell
+Get-NetTCPConnection -LocalPort 4537 -State Listen -ErrorAction SilentlyContinue |
+  Select-Object LocalAddress, LocalPort, OwningProcess,
+    @{Name='Process';Expression={
+      (Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue).ProcessName
+    }}
+```
+
+The original default was **4536**; it was moved to **4537** after a reported
+local `node.exe` conflict. Current Remote Control Switch builds automatically
+migrate saved **default** localhost:4536 profiles, while retaining a user-chosen
+custom port. If the port is still occupied, close the known conflicting service
+or configure **both** SkyCAT and the client to use a different free port:
+
+```powershell
+skycatd.exe -m IC-9700 -r COM9 --switch-port 4547
+```
+
+Then set the client address to `127.0.0.1:4547`. The other ports 4532,
+4534 and 4535 stay unchanged. **Do not terminate an unfamiliar process**
+without checking what it runs. If the Switch client connects but reports
+`ERR RADIO` or `ERR TIMEOUT`, the listener itself is working: check the
+RS-BA1 virtual COM link and IC-9700 CI-V response separately. `PING/PONG`
+only validates the Switch service, **not** radio connectivity.
+
+**Note:** no additional spectrum diagnostic UI, background spectrum
+instrumentation or raw-sweep logging is required for this integration.
