@@ -5,7 +5,7 @@ namespace skycatd;
 
 /// <summary>
 /// A deliberately small, exclusive IC-9700 auxiliary-settings API, served on
-/// localhost:4536. No frequency, VFO selection, SAT write, mode, PTT, raw
+/// localhost:4537. No frequency, VFO selection, SAT write, mode, PTT, raw
 /// CI-V, or arbitrary CAT commands are accepted by this port.
 /// Each request uses CatServer's shared commandLock.
 /// Protocol: GET NAME => VALUE uppercase-hex; SET NAME uppercase-hex => OK.
@@ -68,6 +68,9 @@ public static class IcomSwitchCommands
 
   public static string Execute(CatCommandSender sender, string request)
   {
+    // A protocol handshake that does not wait for CI-V or radio readback.
+    // It proves the client reached the dedicated Switch API, not rigctl 4532.
+    if (request == "PING") return "PONG";
     var parts = request.Split(' ', StringSplitOptions.RemoveEmptyEntries);
     if (parts.Length == 2 && parts[0] == "GET" &&
         Settings.TryGetValue(parts[1], out var getSetting))

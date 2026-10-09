@@ -36,9 +36,9 @@ namespace skycatd
     public int ScopePort { get; set; }
 
     [Option("switch-port", Required = false,
-      HelpText = "Loopback-only IC-9700 Remote Control Switch auxiliary settings port.", Default = 4536)]
+      HelpText = "Loopback-only IC-9700 Remote Control Switch auxiliary settings port.", Default = 4537)]
     [Range(1, 65535, ErrorMessage = "Switch port must be between 1 and 65535")]
-    public int SwitchPort { get; set; } = 4536;
+    public int SwitchPort { get; set; } = 4537;
 
     [Option("no-switch-port", Required = false, Default = false,
       HelpText = "Disable the dedicated IC-9700 Remote Control Switch endpoint.")]
