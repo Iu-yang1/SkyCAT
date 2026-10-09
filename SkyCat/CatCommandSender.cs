@@ -255,6 +255,72 @@ namespace SkyCat
     }
 
     /// <summary>
+    /// Send one IC-9700 CI-V 17 CW message frame. The codec deliberately caps
+    /// this method at the radio's 30-character frame limit; higher layers own
+    /// message queueing and may only send the next frame after this one ACKs.
+    /// </summary>
+    public void SendIcomCwText(string text)
+    {
+      ValidateIcomCwTransport();
+      SendIcomCwWrite(
+        IcomCwKeyerCodec.BuildSend(text),
+        "IC-9700 CW message 17");
+    }
+
+    /// <summary>
+    /// Stop the IC-9700 memory/keyer queue with CI-V 17 FF.
+    /// </summary>
+    public void AbortIcomCw()
+    {
+      ValidateIcomCwTransport();
+      SendIcomCwWrite(
+        IcomCwKeyerCodec.BuildAbort(),
+        "IC-9700 CW abort 17 FF");
+    }
+
+    /// <summary>
+    /// Set IC-9700 electronic-keyer speed with CI-V 14 0C.
+    /// </summary>
+    public void SetIcomCwSpeed(int wpm)
+    {
+      ValidateIcomCwTransport();
+      SendIcomCwWrite(
+        IcomCwKeyerCodec.BuildSpeedWrite(wpm),
+        $"IC-9700 CW key speed {wpm} WPM");
+    }
+
+    private void SendIcomCwWrite(
+      byte[] command,
+      string comment)
+    {
+      _ = SendMessage(new CatMessage
+      {
+        Command =
+          command.Select(b => (byte?)b).ToArray(),
+        Reply =
+        [
+          0xFE, 0xFE, 0xE0, 0xA2,
+          0xFB, 0xFD
+        ],
+        Comment = comment
+      });
+    }
+
+    private void ValidateIcomCwTransport()
+    {
+      if (!string.Equals(
+            RadioName,
+            "IC-9700",
+            StringComparison.OrdinalIgnoreCase))
+        throw new NotSupportedException(
+          "CW CI-V text keying is currently restricted to IC-9700.");
+      if (!SerialPort.IsOpen)
+        throw new InvalidOperationException(
+          "SkyCAT serial CAT port is not connected.");
+    }
+
+
+    /// <summary>
     /// Change the hardware RF gain of the IC-9700 through its existing CAT
     /// transport. RS-BA1's *audio* gain is intentionally not controlled here.
     /// This method is invoked under CatServer.commandLock.
