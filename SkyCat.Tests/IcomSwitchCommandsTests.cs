@@ -68,12 +68,25 @@ public sealed class IcomSwitchCommandsTests
   }
 
   [Fact]
+  public void PingDoesNotRequireAConnectedRadio()
+  {
+    var interpreter = new CommandInterpreter(new Options {
+      Model = "IC-9700", RigFile = "COM99"
+    }, null);
+    Assert.Equal("PONG", IcomSwitchCommands.Execute(interpreter.CommandSender, "PING"));
+    Assert.Equal("ERR INVALID", IcomSwitchCommands.Execute(interpreter.CommandSender, "PING anything"));
+  }
+
+  [Fact]
+  public void DefaultSwitchPortIs4537() => Assert.Equal(4537, new Options().SwitchPort);
+
+  [Fact]
   public void ExplicitPortCannotOverlapExistingServices()
   {
     var opts = new Options {
       Model = "IC-9700", RigFile = "COM99",
       Port = 4532, WsjtXPort = 4534, ScopePort = 4535,
-      SwitchPort = 4536
+      SwitchPort = 4537
     };
     Assert.True(opts.Validate());
     opts.SwitchPort = opts.ScopePort;
