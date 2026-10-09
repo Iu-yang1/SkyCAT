@@ -48,6 +48,65 @@ namespace SkyCat.Tests
       Assert.Equal("RPRT -11", Make().Execute("f"));
     }
 
+    [Fact]
+    public void FrequencyWriteSignaturesUseInt64NotInt32()
+    {
+      var type = typeof(CommandInterpreter);
+      foreach (string method in new[] { "CmdFInt", "CmdIInt" })
+      {
+        var info = type.GetMethod(method,
+          System.Reflection.BindingFlags.NonPublic |
+          System.Reflection.BindingFlags.Instance);
+        Assert.NotNull(info);
+        Assert.Equal(typeof(long),
+          Assert.Single(info.GetParameters()).ParameterType);
+      }
+    }
+
+    [Fact]
+    public void Ic905MicrowaveFrequencySurvivesLittleEndianBcdCodec()
+    {
+      var sender = new SkyCat.CatCommandSender();
+      var param = new SkyCat.CatCommandSet.ParamInfo
+      {
+        Format = SkyCat.CatParamFormat.BCD_LE
+      };
+      var encode = typeof(SkyCat.CatCommandSender).GetMethod(
+        "ParamToBytes",
+        System.Reflection.BindingFlags.NonPublic |
+        System.Reflection.BindingFlags.Instance)!;
+      var decode = typeof(SkyCat.CatCommandSender).GetMethod(
+        "BytesToParam",
+        System.Reflection.BindingFlags.NonPublic |
+        System.Reflection.BindingFlags.Instance)!;
+
+      byte[] payload = (byte[])encode.Invoke(sender,
+        new object?[] { param, "2400000000", 5 })!;
+      Assert.Equal(new byte[] { 0x00, 0x00, 0x00, 0x00, 0x24 }, payload);
+      Assert.Equal("2400000000",
+        decode.Invoke(sender, new object?[] { param, payload }));
+    }
+
+    [Theory]
+    [InlineData("F 2400000000")]
+    [InlineData("I 10000000000")]
+    public void HighFrequencyCommandsReachRigDispatcherWithoutInt32Overflow(
+      string command)
+    {
+      // No radio setup means unsupported-command rather than the parser's
+      // legacy RPRT -11 fallback for an overflowing Int32. The actual BCD
+      // payload is separately validated against the model's byte width.
+      Assert.Equal("RPRT -11", Make().Execute(command));
+    }
+
+    [Theory]
+    [InlineData("F -1")]
+    [InlineData("I -100")]
+    [InlineData("F 999999999999999999999999")]
+    [InlineData("I NaN")]
+    public void InvalidFrequencyTextIsNeverDispatched(string command) =>
+      Assert.Equal("RPRT -11", Make().Execute(command));
+
     // the tone commands are routed now, but TS-2000 defines no CTCSS commands (and no radio is set
     // up here), so they must report "not available" rather than crash
     [Theory]

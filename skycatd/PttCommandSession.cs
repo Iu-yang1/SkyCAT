@@ -12,20 +12,25 @@ namespace skycatd
     private readonly ILogger? Logger;
     private readonly string Name;
     private bool PttAsserted;
+    private readonly PttLeaseManager? SharedLease;
 
     public PttCommandSession(
       Func<string, string> forward,
       ILogger? logger = null,
-      string name = "CAT")
+      string name = "CAT",
+      PttLeaseManager? sharedLease = null)
     {
       Forward = forward;
       Logger = logger;
       Name = name;
+      SharedLease = sharedLease;
     }
 
     public string Execute(string command)
     {
-      string reply = Forward(command);
+      string reply = SharedLease == null
+        ? Forward(command)
+        : SharedLease.Execute(this, command);
       string[] args = command.Split(' ', StringSplitOptions.RemoveEmptyEntries);
 
       if (reply == "RPRT 0" && args.Length == 2 && args[0] == "T")
@@ -39,6 +44,11 @@ namespace skycatd
 
     public void EnsurePttOff()
     {
+      if (SharedLease != null)
+      {
+        SharedLease.Release(this);
+        return;
+      }
       if (!PttAsserted) return;
 
       try

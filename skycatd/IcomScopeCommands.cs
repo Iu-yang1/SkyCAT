@@ -24,6 +24,12 @@ namespace skycatd
         if (args.Length == 2 && args[1] == "SCOPE_READ")
           return ReadAll(sender);
 
+        // Single-register requests allow a CAT client to interleave PTT,
+        // Doppler and tuning between individual scope reads. Each transaction
+        // holds commandLock for at most one 1.5-second CI-V timeout.
+        if (args.Length == 3 && args[1] == "SCOPE_READ_FIELD")
+          return ReadField(sender, args[2]);
+
         if (args.Length == 4 && args[1] == "SCOPE_READ_EDGE")
         {
           byte range = IcomScopeCivCodec.CheckedNumber(args[2], 1, 3);
@@ -161,6 +167,62 @@ namespace skycatd
       "0" => 0, "1" => 1,
       _ => throw new ArgumentException("Expected 0 or 1.")
     };
+
+    public static readonly string[] ScopeReadbackFields =
+    {
+      "SELECT",
+      "MAIN.MODE", "MAIN.SPAN", "MAIN.EDGE", "MAIN.REF",
+      "MAIN.SPEED", "MAIN.VBW",
+      "SUB.MODE", "SUB.SPAN", "SUB.EDGE", "SUB.REF",
+      "SUB.SPEED", "SUB.VBW",
+      "TX", "CENTER", "MARKER"
+    };
+
+    private static string ReadField(CatCommandSender sender, string key)
+    {
+      string result;
+      if (key == "SELECT")
+        result = IcomScopeCivCodec.FormatScope(OnlyValue(sender, 0x12));
+      else if (key == "TX")
+        result = FlagFromRig(OnlyValue(sender, 0x1B)).ToString(Invariant);
+      else if (key == "CENTER")
+        result = IcomScopeCivCodec.FormatCenter(OnlyValue(sender, 0x1C));
+      else if (key == "MARKER")
+        result = IcomScopeCivCodec.FormatMarker(OnlyValue(sender, 0x20));
+      else
+      {
+        byte receiver;
+        if (key.StartsWith("MAIN.", StringComparison.Ordinal))
+          receiver = 0;
+        else if (key.StartsWith("SUB.", StringComparison.Ordinal))
+          receiver = 1;
+        else
+          throw new ArgumentException("Unknown scope readback field.");
+
+        string field = key[(key.IndexOf('.') + 1)..];
+        result = field switch
+        {
+          "MODE" => IcomScopeCivCodec.FormatMode(OnlyValue(sender, 0x14, receiver)),
+          "SPAN" => IcomScopeCivCodec.DecodeSpan(
+            sender.ReadIcomScope(0x15, 5, receiver)).ToString(Invariant),
+          "EDGE" => ReadEdge(sender, receiver).ToString(Invariant),
+          "REF" => IcomScopeCivCodec.DecodeReference(
+            sender.ReadIcomScope(0x19, 3, receiver)).ToString("0.0", Invariant),
+          "SPEED" => IcomScopeCivCodec.FormatSpeed(OnlyValue(sender, 0x1A, receiver)),
+          "VBW" => IcomScopeCivCodec.FormatVbw(OnlyValue(sender, 0x1D, receiver)),
+          _ => throw new ArgumentException("Unknown scope readback field.")
+        };
+      }
+      return $"{key}={result}";
+    }
+
+    private static byte ReadEdge(CatCommandSender sender, byte receiver)
+    {
+      byte edge = OnlyValue(sender, 0x16, receiver);
+      if (edge is < 1 or > 4)
+        throw new FormatException("Invalid IC-9700 scope edge selection.");
+      return edge;
+    }
 
     private static string ReadAll(CatCommandSender sender)
     {

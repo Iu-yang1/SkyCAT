@@ -23,6 +23,7 @@ namespace skycatd
     private readonly CatCommandSender commandSender;
     private readonly SerialPort serialPort;
     private readonly object commandLock = new();
+    private readonly PttLeaseManager pttLease;
     private Task? ScopeDrainTask;
 
     private PortStatus ComStatus;
@@ -42,6 +43,7 @@ namespace skycatd
       commandInterpreter = new CommandInterpreter(options, logger);
       commandSender = commandInterpreter.CommandSender;
       serialPort = commandSender.SerialPort;
+      pttLease = new PttLeaseManager(commandInterpreter.Execute);
 
       scopeStreamServer = new ScopeStreamServer(options.ScopePort, logger);
       commandSender.ScopeFrameReceived += scopeStreamServer.Publish;
@@ -59,7 +61,7 @@ namespace skycatd
         serverName: "CAT",
         clientSessionFactory: () =>
         {
-          var session = new PttCommandSession(commandInterpreter.Execute, logger, "CAT");
+          var session = new PttCommandSession(commandInterpreter.Execute, logger, "CAT", pttLease);
           return new TcpClientSession(session.Execute, session.EnsurePttOff);
         });
 
@@ -74,8 +76,14 @@ namespace skycatd
           serverName: "WSJT-X proxy",
           clientSessionFactory: () =>
           {
-            var session = new WsjtXCommandInterpreter(commandInterpreter.Execute, logger);
-            return new TcpClientSession(session.Execute, session.EnsurePttOff);
+            // Both endpoints must share one hardware PTT owner. The WSJT-X
+            // facade forwards only T commands through this per-client lease.
+            var lease = new PttCommandSession(
+              commandInterpreter.Execute, logger, "WSJT-X", pttLease);
+            var session = new WsjtXCommandInterpreter(lease.Execute, logger);
+            return new TcpClientSession(
+              session.Execute,
+              () => { session.EnsurePttOff(); lease.EnsurePttOff(); });
           });
       }
     }
@@ -190,6 +198,8 @@ namespace skycatd
             Thread.Sleep(300);
 
             logger.LogInformation("Serial port opened.");
+            lock (commandLock)
+              pttLease.RetryUncertainRelease();
           }
           catch (Exception ex)
           {

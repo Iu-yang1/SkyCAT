@@ -141,6 +141,27 @@ public sealed class IcomScopeCommandsTests
   }
 
   [Fact]
+  public void IndividualScopeReadbackFieldsAreIndependentlyAddressable()
+  {
+    Assert.Equal(16, IcomScopeCommands.ScopeReadbackFields.Length);
+    var interpreter = new CommandInterpreter(
+      new Options { Model = "IC-9700", RigFile = "COM99" }, null);
+    foreach (string field in IcomScopeCommands.ScopeReadbackFields)
+      Assert.Equal("RPRT -6",
+        interpreter.Execute("U SCOPE_READ_FIELD " + field));
+  }
+
+  [Theory]
+  [InlineData("U SCOPE_READ_FIELD MAIN.INVALID")]
+  [InlineData("U SCOPE_READ_FIELD GARBAGE")]
+  public void UnknownScopeFieldIsRejectedWithoutAccessToSerialPort(string cmd)
+  {
+    var interpreter = new CommandInterpreter(
+      new Options { Model = "IC-9700", RigFile = "COM99" }, null);
+    Assert.Equal("RPRT -1", interpreter.Execute(cmd));
+  }
+
+  [Fact]
   public void OtherRadioCannotReceiveIcomScopeCommands()
   {
     var interpreter = new CommandInterpreter(

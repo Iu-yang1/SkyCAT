@@ -505,6 +505,33 @@ The main SkyCAT TCP server understands the following line-oriented commands:
 | Set stored fixed edges (Hz) | `U SCOPE_FIXED_EDGE 2 1 435000000 436000000` |
 
 
+### Incremental scope readback and PTT arbitration
+
+SkyRoof's newer frequency/spectrum controller uses `U SCOPE_READ_FIELD <KEY>`
+to read one physical CI-V scope register per CAT cycle. This prevents a
+16-register bulk `U SCOPE_READ` from occupying the shared CAT command
+lock for many consecutive round trips.
+
+Supported `KEY` values are `SELECT`, `MAIN.MODE`, `MAIN.SPAN`,
+`MAIN.EDGE`, `MAIN.REF`, `MAIN.SPEED`, `MAIN.VBW`, the corresponding
+six `SUB.*` fields, `TX`, `CENTER`, and `MARKER`. A successful reply
+is precisely `KEY=value`. An unsupported/timed-out field returns its normal
+`RPRT` error and does not prevent SkyRoof from applying other confirmed
+fields. Legacy `U SCOPE_READ` remains available but is a blocking query.
+
+The main CAT port and the WSJT-X compatibility proxy now share a single
+exclusive PTT lease. The client that asserted PTT is responsible for
+releasing it. A competing `T 1` returns `RPRT -6`; a non-owner `T 0`
+cannot unkey the active owner. If the ON reply is ambiguous, the server
+tries an immediate OFF and protects the lease until OFF is confirmed.
+Following an interrupted/disconnected COM session, it retries the
+fail-safe release before admitting another owner.
+
+`F` and `I` frequency writes accept nonnegative 64-bit Hertz values;
+the selected radio's JSON command definition still sets the maximum
+CI-V frequency field width. For example IC-905's five-byte BCD field
+supports 2.4 GHz but is not sufficient for every 10 GHz setting.
+
 ### SkyRoof scope-control handshake
 
 The spectrum waveform stream (TCP 4535) and the CAT command port (default 4534)
