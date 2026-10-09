@@ -107,10 +107,13 @@ namespace skycatd
     private readonly ConcurrentDictionary<int, ScopeClient> Clients = new();
     private int NextClientId;
     private long InputChunks;
+    private readonly IcomScopeSweepMeter SweepMeter = new();
     private long HistoricalSent;
     private long HistoricalDropped;
 
-    internal (long Input, long Sent, long Dropped, int Clients) GetDiagnostics()
+    internal (long Input, long Sent, long Dropped,
+      long CompleteSweeps, long IncompleteSweeps, long InvalidChunks,
+      int Clients) GetDiagnostics()
     {
       long sent = Interlocked.Read(ref HistoricalSent);
       long dropped = Interlocked.Read(ref HistoricalDropped);
@@ -119,7 +122,9 @@ namespace skycatd
         sent += client.Sent;
         dropped += client.Dropped;
       }
-      return (Interlocked.Read(ref InputChunks), sent, dropped, Clients.Count);
+      var meter = SweepMeter.Snapshot();
+      return (Interlocked.Read(ref InputChunks), sent, dropped,
+        meter.Completed, meter.Incomplete, meter.Invalid, Clients.Count);
     }
 
     internal ScopeStreamServer(int port, ILogger logger)
@@ -182,6 +187,7 @@ namespace skycatd
       if (frame == null || frame.Length == 0)
         return;
       Interlocked.Increment(ref InputChunks);
+      SweepMeter.Record(frame);
       if (Clients.IsEmpty)
         return;
 
