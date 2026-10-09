@@ -34,6 +34,9 @@ namespace skycatd
     private long LastScopeInput;
     private long LastScopeSent;
     private long LastScopeDropped;
+    private long LastCompletedSweeps;
+    private long LastIncompleteSweeps;
+    private long LastInvalidScopeChunks;
 
     public CatServer(Options options)
     {
@@ -280,16 +283,24 @@ namespace skycatd
             logger.LogInformation(
               "Native scope transport: input {InputRate:0.0} chunks/s, " +
               "sent {SentRate:0.0} chunks/s, " +
-              "dropped {DropRate:0.0} chunks/s, clients {Clients}. " +
-              "Note: a full IC-9700 sweep may contain up to 11 chunks.",
+              "dropped {DropRate:0.0} chunks/s, " +
+              "complete input sweeps {SweepRate:0.0}/s, " +
+              "incomplete input sweeps {IncompleteRate:0.0}/s, " +
+              "invalid scope chunks {InvalidRate:0.0}/s; clients {Clients}.",
               (snapshot.Input - LastScopeInput) / seconds,
               (snapshot.Sent - LastScopeSent) / seconds,
               (snapshot.Dropped - LastScopeDropped) / seconds,
+              (snapshot.CompleteSweeps - LastCompletedSweeps) / seconds,
+              (snapshot.IncompleteSweeps - LastIncompleteSweeps) / seconds,
+              (snapshot.InvalidChunks - LastInvalidScopeChunks) / seconds,
               snapshot.Clients);
           }
           LastScopeInput = snapshot.Input;
           LastScopeSent = snapshot.Sent;
           LastScopeDropped = snapshot.Dropped;
+          LastCompletedSweeps = snapshot.CompleteSweeps;
+          LastIncompleteSweeps = snapshot.IncompleteSweeps;
+          LastInvalidScopeChunks = snapshot.InvalidChunks;
           LastScopeStatisticsUtc = sampleAt;
         }
       }
