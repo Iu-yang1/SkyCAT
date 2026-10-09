@@ -13,6 +13,7 @@ namespace skycatd
     private object? Owner;
     private bool MayBeKeyed;
     private bool Orphaned;
+    private object? ExternalTxOwner;
 
     public PttLeaseManager(Func<string, string> forward) =>
       Forward = forward;
@@ -37,6 +38,8 @@ namespace skycatd
         // transferring ownership; a failed recovery remains fail-closed.
         if (Owner != null && Orphaned)
           TryFailSafeUnkey();
+        if (ExternalTxOwner != null)
+          return "RPRT -6";
         if (Owner != null)
           return ReferenceEquals(Owner, client) && MayBeKeyed
             ? "RPRT 0"
@@ -115,6 +118,60 @@ namespace skycatd
       {
         // Keep the uncertain lease. A second client may NOT key until the
         // transport comes back and the shutdown/reconnect fail-safe unkeys.
+      }
+    }
+
+    /// <summary>
+    /// Reserve the transmitter for a non-PTT mechanism such as IC-9700
+    /// Command 17 CW keying. The reservation is deliberately conservative:
+    /// a CAT/WSJT-X PTT owner or uncertain PTT state blocks acquisition.
+    /// </summary>
+    public bool TryAcquireExternal(object client)
+    {
+      lock (Sync)
+      {
+        if (Owner != null || MayBeKeyed)
+          return false;
+
+        if (ExternalTxOwner == null)
+        {
+          ExternalTxOwner = client;
+          return true;
+        }
+
+        return ReferenceEquals(
+          ExternalTxOwner,
+          client);
+      }
+    }
+
+    public void ReleaseExternal(object client)
+    {
+      lock (Sync)
+      {
+        if (ReferenceEquals(
+              ExternalTxOwner,
+              client))
+          ExternalTxOwner = null;
+      }
+    }
+
+    public bool IsExternalOwner(object client)
+    {
+      lock (Sync)
+        return ReferenceEquals(
+          ExternalTxOwner,
+          client);
+    }
+
+    public bool HasAnyLease
+    {
+      get
+      {
+        lock (Sync)
+          return Owner != null ||
+                 MayBeKeyed ||
+                 ExternalTxOwner != null;
       }
     }
 
