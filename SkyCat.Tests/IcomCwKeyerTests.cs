@@ -162,6 +162,78 @@ public sealed class IcomCwKeyerTests
   }
 
   [Fact]
+  public void SendHz_RequiresActualTxFrequencyWithinTolerance()
+  {
+    var fixture =
+      new Fixture();
+
+    fixture.ActualTxFrequencyHz =
+      435000018;
+
+    Assert.Equal(
+      "OK",
+      fixture.Keyer.Execute(
+        fixture.CwClient,
+        "SENDHZ 435000000 25 CQ TEST"));
+
+    Assert.Equal(
+      new[] { "CQ TEST" },
+      fixture.SentMessages);
+
+    Assert.Equal(
+      "OK",
+      fixture.Keyer.Execute(
+        fixture.CwClient,
+        "STOP"));
+
+    fixture.ActualTxFrequencyHz =
+      435000040;
+
+    Assert.Equal(
+      "ERR FREQ",
+      fixture.Keyer.Execute(
+        fixture.CwClient,
+        "SENDHZ 435000000 25 CQ"));
+
+    Assert.Equal(
+      new[] { "CQ TEST" },
+      fixture.SentMessages);
+    Assert.False(
+      fixture.Keyer.HasLease);
+
+    Assert.Equal(
+      "RPRT 0",
+      fixture.Ptt.Execute(
+        fixture.PttClient,
+        "T 1"));
+    fixture.Ptt.Execute(
+      fixture.PttClient,
+      "T 0");
+  }
+
+  [Theory]
+  [InlineData("SENDHZ")]
+  [InlineData("SENDHZ 435000000")]
+  [InlineData("SENDHZ abc 25 CQ")]
+  [InlineData("SENDHZ 435000000 -1 CQ")]
+  [InlineData("SENDHZ 435000000 5001 CQ")]
+  public void SendHz_RejectsInvalidFrequencyGuardSyntax(
+    string request)
+  {
+    var fixture =
+      new Fixture();
+
+    Assert.Equal(
+      "ERR INVALID",
+      fixture.Keyer.Execute(
+        fixture.CwClient,
+        request));
+
+    Assert.Empty(
+      fixture.SentMessages);
+  }
+
+  [Fact]
   public void AmbiguousSend_PerformsFailSafeStopBeforeReleasingLease()
   {
     var fixture =
@@ -241,7 +313,7 @@ public sealed class IcomCwKeyerTests
       new Fixture();
 
     Assert.Equal(
-      "STATUS IDLE MODE=CW BKIN=1 TX=0 KEYRAW=128",
+      "STATUS IDLE MODE=CW BKIN=1 TX=0 KEYRAW=128 TXHZ=435000000",
       fixture.Keyer.Execute(
         fixture.CwClient,
         "STATUS"));
@@ -253,7 +325,7 @@ public sealed class IcomCwKeyerTests
         "SEND CQ"));
 
     Assert.Equal(
-      "STATUS OWNED MODE=CW BKIN=1 TX=0 KEYRAW=128",
+      "STATUS OWNED MODE=CW BKIN=1 TX=0 KEYRAW=128 TXHZ=435000000",
       fixture.Keyer.Execute(
         fixture.CwClient,
         "STATUS"));
@@ -280,6 +352,8 @@ public sealed class IcomCwKeyerTests
       "0";
     public int KeySpeedRaw { get; set; } =
       128;
+    public long ActualTxFrequencyHz { get; set; } =
+      435000000;
 
     public Exception? SendFailure {
       get; set;
@@ -313,6 +387,9 @@ public sealed class IcomCwKeyerTests
                 Mode,
               CatCommand.read_ptt =>
                 HardwarePtt,
+              CatCommand.read_tx_frequency =>
+                ActualTxFrequencyHz.ToString(
+                  System.Globalization.CultureInfo.InvariantCulture),
               _ =>
                 throw new InvalidOperationException(
                   "Unexpected CAT command.")
