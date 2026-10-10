@@ -44,6 +44,15 @@ namespace skycatd
       HelpText = "Disable the dedicated IC-9700 Remote Control Switch endpoint.")]
     public bool DisableSwitchPort { get; set; }
 
+    [Option("cw-port", Required = false,
+      HelpText = "Loopback-only IC-9700 CW Command 17 keyer port.", Default = 4538)]
+    [Range(1, 65535, ErrorMessage = "CW keyer port must be between 1 and 65535")]
+    public int CwPort { get; set; } = 4538;
+
+    [Option("no-cw-port", Required = false, Default = false,
+      HelpText = "Disable the dedicated IC-9700 CW keyer endpoint.")]
+    public bool DisableCwPort { get; set; }
+
     [Option("no-wsjtx-proxy", Required = false, HelpText = "Disable the loopback WSJT-X compatibility server.", Default = false)]
     public bool DisableWsjtXProxy { get; set; }
 
@@ -91,6 +100,13 @@ namespace skycatd
           (SwitchPort == Port || SwitchPort == ScopePort ||
            (!DisableWsjtXProxy && SwitchPort == WsjtXPort)))
         errors.Add("Dedicated Switch port must differ from active SkyCAT endpoints.");
+
+      if (!DisableCwPort &&
+          (CwPort == Port ||
+           CwPort == ScopePort ||
+           (!DisableWsjtXProxy && CwPort == WsjtXPort) ||
+           (!DisableSwitchPort && CwPort == SwitchPort)))
+        errors.Add("Dedicated CW keyer port must differ from active SkyCAT endpoints.");
 
       if (errors.Any())
       {
