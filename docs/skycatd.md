@@ -274,9 +274,10 @@ The protocol is line-oriented ASCII:
 | Request | Reply / action |
 |---|---|
 | `PING` | `PONG` |
-| `CAPS` | Reports the 30-character, CW/CW-R and BK-IN requirements |
-| `STATUS` | Reports lease state, TX mode, BK-IN, hardware TX state and `KEYRAW=0..255` key-speed readback |
+| `CAPS` | Reports the 30-character, CW/CW-R, BK-IN, TXHZ and SENDHZ capabilities |
+| `STATUS` | Reports lease state, TX mode, BK-IN, hardware TX state, `KEYRAW=0..255`, and actual TX frequency `TXHZ=<Hz>` |
 | `SEND <text>` | Sends up to 30 CW characters using IC-9700 CI-V Command 17 |
+| `SENDHZ <expectedHz> <toleranceHz> <text>` | Atomically re-reads actual TX VFO before Command 17; out-of-tolerance returns `ERR FREQ`; validation only, never retunes |
 | `STOP` | Sends binary Command 17 `FF` to stop the keyer |
 
 Safety policy:
@@ -285,6 +286,8 @@ Safety policy:
 - Radio BK-IN must already be **Semi or Full**; SkyCAT never enables BK-IN automatically.
 - `SEND` is rejected if the radio is already transmitting.
 - CW and CAT/WSJT-X PTT share an exclusive transmitter lease.
+- while the CW lease is active, main CAT TX/split frequency `I`, TX/split mode `X`, CTCSS `C`/`U TONE`, and operating-mode/SAT reconfiguration return `RPRT -6`; RX `F`/`M`, reads, scope and RF-gain traffic remain available.
+- satellite clients should use `SENDHZ` so the actual TX VFO is validated inside the same serial/lease critical section immediately before Command 17.
 - ambiguous SEND, disconnect, serial recovery and shutdown all attempt a fail-safe binary `17 FF`.
 - if STOP cannot be confirmed, the lease remains fail-closed and no other PTT/CW client may transmit.
 
