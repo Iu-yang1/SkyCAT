@@ -1,3 +1,5 @@
+using SkyCat;
+
 namespace skycatd;
 
 /// <summary>
