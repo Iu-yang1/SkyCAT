@@ -13,7 +13,7 @@ namespace skycatd;
 /// </summary>
 public sealed class IcomCwKeyerLeaseManager
 {
-  private readonly Func<CatCommandSet.CatCommand, string?> SendCat;
+  private readonly Func<CatCommand, string?> SendCat;
   private readonly Func<int> ReadBreakIn;
   private readonly Action<string> SendCw;
   private readonly Action StopCw;
@@ -47,7 +47,7 @@ public sealed class IcomCwKeyerLeaseManager
   }
 
   public IcomCwKeyerLeaseManager(
-    Func<CatCommandSet.CatCommand, string?> sendCat,
+    Func<CatCommand, string?> sendCat,
     Func<int> readBreakIn,
     Action<string> sendCw,
     Action stopCw,
@@ -112,7 +112,7 @@ public sealed class IcomCwKeyerLeaseManager
       {
         string mode =
           SendCat(
-            CatCommandSet.CatCommand.read_tx_mode)
+            CatCommand.read_tx_mode)
           ?? "?";
 
         int breakIn =
@@ -120,7 +120,7 @@ public sealed class IcomCwKeyerLeaseManager
 
         string tx =
           SendCat(
-            CatCommandSet.CatCommand.read_ptt)
+            CatCommand.read_ptt)
           ?? "?";
 
         return
@@ -165,7 +165,7 @@ public sealed class IcomCwKeyerLeaseManager
       {
         string mode =
           SendCat(
-            CatCommandSet.CatCommand.read_tx_mode)
+            CatCommand.read_tx_mode)
           ?? string.Empty;
 
         if (mode is not ("CW" or "CW-R"))
@@ -187,7 +187,7 @@ public sealed class IcomCwKeyerLeaseManager
 
         string ptt =
           SendCat(
-            CatCommandSet.CatCommand.read_ptt)
+            CatCommand.read_ptt)
           ?? "1";
 
         // Do not inject a CW message into a transmitter that is already keyed
