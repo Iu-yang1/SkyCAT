@@ -364,6 +364,31 @@ namespace SkyCat
     }
 
     /// <summary>
+    /// Write IC-9700 keying-speed control 14 0C as normalized raw 0..255.
+    /// The radio requires four decimal BCD digits 0000..0255.
+    /// Verification is deliberately performed by the CW protocol layer so the
+    /// caller can distinguish a confirmed write from an ACK-only transaction.
+    /// </summary>
+    public void SetIcomKeySpeedRaw(int raw)
+    {
+      if (raw is < 0 or > 255)
+        throw new ArgumentOutOfRangeException(nameof(raw));
+
+      int thousands = raw / 1000;
+      int hundreds = (raw / 100) % 10;
+      int tens = (raw / 10) % 10;
+      int ones = raw % 10;
+
+      WriteIcomSwitchSetting(
+        new byte[] { 0x14, 0x0C },
+        new byte[]
+        {
+          (byte)((thousands << 4) | hundreds),
+          (byte)((tens << 4) | ones)
+        });
+    }
+
+    /// <summary>
     /// Change the hardware RF gain of the IC-9700 through its existing CAT
     /// transport. RS-BA1's *audio* gain is intentionally not controlled here.
     /// This method is invoked under CatServer.commandLock.
