@@ -39,7 +39,7 @@ public sealed class CwCatWriteGate
     return Forward(command);
   }
 
-  internal static bool IsTxStateWrite(
+  public static bool IsTxStateWrite(
     string command)
   {
     string[] args =
