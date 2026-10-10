@@ -275,7 +275,7 @@ The protocol is line-oriented ASCII:
 |---|---|
 | `PING` | `PONG` |
 | `CAPS` | Reports the 30-character, CW/CW-R and BK-IN requirements |
-| `STATUS` | Reports lease state, TX mode, BK-IN and hardware TX state |
+| `STATUS` | Reports lease state, TX mode, BK-IN, hardware TX state and `KEYRAW=0..255` key-speed readback |
 | `SEND <text>` | Sends up to 30 CW characters using IC-9700 CI-V Command 17 |
 | `STOP` | Sends binary Command 17 `FF` to stop the keyer |
 
