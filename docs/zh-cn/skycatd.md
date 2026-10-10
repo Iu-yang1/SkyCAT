@@ -260,9 +260,10 @@ skycatd.exe -m IC-9700 -r COM9 --cw-port 4538
 | 请求 | 返回/作用 |
 |---|---|
 | `PING` | `PONG` |
-| `CAPS` | 返回 30 字符、CW/CW-R、BK-IN 等约束 |
-| `STATUS` | 返回 lease、TX mode、BK-IN、硬件 TX 状态与 `KEYRAW=0..255` key-speed 读回 |
+| `CAPS` | 返回 30 字符、CW/CW-R、BK-IN，以及 TXHZ/SENDHZ 能力 |
+| `STATUS` | 返回 lease、TX mode、BK-IN、硬件 TX、`KEYRAW=0..255` 与实际 TX 频率 `TXHZ=<Hz>` |
 | `SEND <text>` | 使用 IC-9700 CI-V Command 17 发送最多 30 字符 CW |
+| `SENDHZ <expectedHz> <toleranceHz> <text>` | 在 Command 17 前原子回读实际 TX VFO；超差返回 `ERR FREQ`，只验证、不调谐 |
 | `STOP` | 发送二进制 `17 FF` 停止 CW |
 
 安全规则：
