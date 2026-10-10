@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.Extensions.Logging;
 using SkyCat;
 
@@ -81,7 +82,7 @@ public sealed class IcomCwKeyerLeaseManager
       return "PONG";
 
     if (request == "CAPS")
-      return "CAPS MAX=30 MODES=CW,CW-R BKIN=REQUIRED STOP=FF";
+      return "CAPS MAX=30 MODES=CW,CW-R BKIN=REQUIRED STOP=FF TXHZ=STATUS FREQCHECK=SENDHZ";
 
     if (request == "STATUS")
       return Status(client);
@@ -90,11 +91,20 @@ public sealed class IcomCwKeyerLeaseManager
       return Stop(client);
 
     if (request.StartsWith(
+          "SENDHZ ",
+          StringComparison.Ordinal))
+      return SendChecked(
+        client,
+        request[7..]);
+
+    if (request.StartsWith(
           "SEND ",
           StringComparison.Ordinal))
       return Send(
         client,
-        request[5..]);
+        request[5..],
+        expectedTxHz: null,
+        toleranceHz: 0);
 
     return "ERR INVALID";
   }
@@ -132,8 +142,11 @@ public sealed class IcomCwKeyerLeaseManager
             CatCommand.read_ptt)
           ?? "?";
 
+        long txHz =
+          ReadActualTxFrequencyHz();
+
         return
-          $"STATUS {lease} MODE={mode} BKIN={breakIn} TX={tx} KEYRAW={keyRaw}";
+          $"STATUS {lease} MODE={mode} BKIN={breakIn} TX={tx} KEYRAW={keyRaw} TXHZ={txHz.ToString(CultureInfo.InvariantCulture)}";
       }
       catch (Exception ex)
       {
@@ -142,9 +155,43 @@ public sealed class IcomCwKeyerLeaseManager
     }
   }
 
+  private string SendChecked(
+    object client,
+    string arguments)
+  {
+    string[] parts =
+      arguments.Split(
+        ' ',
+        3,
+        StringSplitOptions.RemoveEmptyEntries);
+
+    if (parts.Length != 3 ||
+        !long.TryParse(
+          parts[0],
+          NumberStyles.None,
+          CultureInfo.InvariantCulture,
+          out long expectedTxHz) ||
+        !int.TryParse(
+          parts[1],
+          NumberStyles.None,
+          CultureInfo.InvariantCulture,
+          out int toleranceHz) ||
+        expectedTxHz <= 0 ||
+        toleranceHz is < 0 or > 5000)
+      return "ERR INVALID";
+
+    return Send(
+      client,
+      parts[2],
+      expectedTxHz,
+      toleranceHz);
+  }
+
   private string Send(
     object client,
-    string text)
+    string text,
+    long? expectedTxHz,
+    int toleranceHz)
   {
     try
     {
@@ -208,6 +255,22 @@ public sealed class IcomCwKeyerLeaseManager
           return "ERR TXACTIVE";
         }
 
+        if (expectedTxHz.HasValue)
+        {
+          long actualTxHz =
+            ReadActualTxFrequencyHz();
+
+          if (Math.Abs(
+                actualTxHz -
+                expectedTxHz.Value) >
+              toleranceHz)
+          {
+            PttLease.ReleaseExternal(client);
+            reservationHeld = false;
+            return "ERR FREQ";
+          }
+        }
+
         // Reserve ownership before the write: a timeout after SerialPort.Write
         // is ambiguous and the radio may already be sending CW.
         Owner = client;
@@ -230,6 +293,24 @@ public sealed class IcomCwKeyerLeaseManager
         return FormatError(ex);
       }
     }
+  }
+
+  private long ReadActualTxFrequencyHz()
+  {
+    string? value =
+      SendCat(
+        CatCommand.read_tx_frequency);
+
+    if (!long.TryParse(
+          value,
+          NumberStyles.None,
+          CultureInfo.InvariantCulture,
+          out long frequencyHz) ||
+        frequencyHz <= 0)
+      throw new InvalidReplyException(
+        "IC-9700 returned an invalid TX frequency.");
+
+    return frequencyHz;
   }
 
   private string Stop(object client)
