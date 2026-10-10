@@ -47,8 +47,7 @@ public sealed class IcomCwKeyerTests
     Assert.Throws<ArgumentException>(
       () =>
         IcomCwMessageCodec.Validate(
-          "CQ
-TEST"));
+          "CQ\\nTEST"));
 
     IcomCwMessageCodec.Validate(
       "CQ^TEST?");
