@@ -17,6 +17,7 @@ public sealed class IcomCwKeyerLeaseManager
   private readonly Func<CatCommand, string?> SendCat;
   private readonly Func<int> ReadBreakIn;
   private readonly Func<int> ReadKeySpeedRaw;
+  private readonly Action<int> WriteKeySpeedRaw;
   private readonly Action<string> SendCw;
   private readonly Action StopCw;
   private readonly PttLeaseManager PttLease;
@@ -41,6 +42,8 @@ public sealed class IcomCwKeyerLeaseManager
       sender.ReadIcomBreakInMode;
     ReadKeySpeedRaw =
       sender.ReadIcomKeySpeedRaw;
+    WriteKeySpeedRaw =
+      sender.SetIcomKeySpeedRaw;
     SendCw =
       sender.SendIcomCwMessage;
     StopCw =
@@ -54,6 +57,7 @@ public sealed class IcomCwKeyerLeaseManager
     Func<CatCommand, string?> sendCat,
     Func<int> readBreakIn,
     Func<int> readKeySpeedRaw,
+    Action<int> writeKeySpeedRaw,
     Action<string> sendCw,
     Action stopCw,
     PttLeaseManager pttLease,
@@ -65,6 +69,8 @@ public sealed class IcomCwKeyerLeaseManager
       throw new ArgumentNullException(nameof(readBreakIn));
     ReadKeySpeedRaw = readKeySpeedRaw ??
       throw new ArgumentNullException(nameof(readKeySpeedRaw));
+    WriteKeySpeedRaw = writeKeySpeedRaw ??
+      throw new ArgumentNullException(nameof(writeKeySpeedRaw));
     SendCw = sendCw ??
       throw new ArgumentNullException(nameof(sendCw));
     StopCw = stopCw ??
@@ -82,13 +88,27 @@ public sealed class IcomCwKeyerLeaseManager
       return "PONG";
 
     if (request == "CAPS")
-      return "CAPS MAX=30 MODES=CW,CW-R BKIN=REQUIRED STOP=FF TXHZ=STATUS FREQCHECK=SENDHZ";
+      return "CAPS MAX=30 MODES=CW,CW-R BKIN=REQUIRED STOP=FF TXHZ=STATUS FREQCHECK=SENDHZ KEYSPEED=SETWPM,SETKEYRAW";
 
     if (request == "STATUS")
       return Status(client);
 
     if (request == "STOP")
       return Stop(client);
+
+    if (request.StartsWith(
+          "SETWPM ",
+          StringComparison.Ordinal))
+      return SetWpm(
+        client,
+        request[7..]);
+
+    if (request.StartsWith(
+          "SETKEYRAW ",
+          StringComparison.Ordinal))
+      return SetKeyRaw(
+        client,
+        request[10..]);
 
     if (request.StartsWith(
           "SENDHZ ",
@@ -147,6 +167,81 @@ public sealed class IcomCwKeyerLeaseManager
 
         return
           $"STATUS {lease} MODE={mode} BKIN={breakIn} TX={tx} KEYRAW={keyRaw} TXHZ={txHz.ToString(CultureInfo.InvariantCulture)}";
+      }
+      catch (Exception ex)
+      {
+        return FormatError(ex);
+      }
+    }
+  }
+
+  private string SetWpm(
+    object client,
+    string argument)
+  {
+    if (!double.TryParse(
+          argument,
+          NumberStyles.AllowDecimalPoint,
+          CultureInfo.InvariantCulture,
+          out double wpm) ||
+        !double.IsFinite(wpm) ||
+        wpm is < 6.0 or > 48.0)
+      return "ERR INVALID";
+
+    int raw = (int)Math.Round(
+      (wpm - 6.0) * 255.0 / 42.0,
+      MidpointRounding.AwayFromZero);
+
+    return SetKeySpeedRaw(client, raw);
+  }
+
+  private string SetKeyRaw(
+    object client,
+    string argument)
+  {
+    if (!int.TryParse(
+          argument,
+          NumberStyles.None,
+          CultureInfo.InvariantCulture,
+          out int raw) ||
+        raw is < 0 or > 255)
+      return "ERR INVALID";
+
+    return SetKeySpeedRaw(client, raw);
+  }
+
+  private string SetKeySpeedRaw(
+    object client,
+    int raw)
+  {
+    lock (Sync)
+    {
+      if (Owner != null)
+        return "ERR BUSY";
+
+      try
+      {
+        string tx =
+          SendCat(
+            CatCommand.read_ptt)
+          ?? "1";
+
+        if (tx != "0")
+          return "ERR TXACTIVE";
+
+        WriteKeySpeedRaw(raw);
+        int verifiedRaw =
+          ReadKeySpeedRaw();
+
+        if (verifiedRaw != raw)
+          return "ERR VERIFY";
+
+        double verifiedWpm =
+          6.0 +
+          verifiedRaw * 42.0 / 255.0;
+
+        return
+          $"OK KEYRAW={verifiedRaw} WPM={verifiedWpm.ToString("F2", CultureInfo.InvariantCulture)}";
       }
       catch (Exception ex)
       {
