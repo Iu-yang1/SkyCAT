@@ -308,9 +308,9 @@ TEST"));
           sendCat: command =>
             command switch
             {
-              CatCommandSet.CatCommand.read_tx_mode =>
+              CatCommand.read_tx_mode =>
                 Mode,
-              CatCommandSet.CatCommand.read_ptt =>
+              CatCommand.read_ptt =>
                 HardwarePtt,
               _ =>
                 throw new InvalidOperationException(
