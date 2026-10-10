@@ -15,6 +15,7 @@ public sealed class IcomCwKeyerLeaseManager
 {
   private readonly Func<CatCommand, string?> SendCat;
   private readonly Func<int> ReadBreakIn;
+  private readonly Func<int> ReadKeySpeedRaw;
   private readonly Action<string> SendCw;
   private readonly Action StopCw;
   private readonly PttLeaseManager PttLease;
@@ -37,6 +38,8 @@ public sealed class IcomCwKeyerLeaseManager
         sender.SendCommand(command);
     ReadBreakIn =
       sender.ReadIcomBreakInMode;
+    ReadKeySpeedRaw =
+      sender.ReadIcomKeySpeedRaw;
     SendCw =
       sender.SendIcomCwMessage;
     StopCw =
@@ -49,6 +52,7 @@ public sealed class IcomCwKeyerLeaseManager
   public IcomCwKeyerLeaseManager(
     Func<CatCommand, string?> sendCat,
     Func<int> readBreakIn,
+    Func<int> readKeySpeedRaw,
     Action<string> sendCw,
     Action stopCw,
     PttLeaseManager pttLease,
@@ -58,6 +62,8 @@ public sealed class IcomCwKeyerLeaseManager
       throw new ArgumentNullException(nameof(sendCat));
     ReadBreakIn = readBreakIn ??
       throw new ArgumentNullException(nameof(readBreakIn));
+    ReadKeySpeedRaw = readKeySpeedRaw ??
+      throw new ArgumentNullException(nameof(readKeySpeedRaw));
     SendCw = sendCw ??
       throw new ArgumentNullException(nameof(sendCw));
     StopCw = stopCw ??
@@ -118,13 +124,16 @@ public sealed class IcomCwKeyerLeaseManager
         int breakIn =
           ReadBreakIn();
 
+        int keyRaw =
+          ReadKeySpeedRaw();
+
         string tx =
           SendCat(
             CatCommand.read_ptt)
           ?? "?";
 
         return
-          $"STATUS {lease} MODE={mode} BKIN={breakIn} TX={tx}";
+          $"STATUS {lease} MODE={mode} BKIN={breakIn} TX={tx} KEYRAW={keyRaw}";
       }
       catch (Exception ex)
       {
