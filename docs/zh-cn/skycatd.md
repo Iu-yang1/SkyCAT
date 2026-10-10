@@ -261,7 +261,7 @@ skycatd.exe -m IC-9700 -r COM9 --cw-port 4538
 |---|---|
 | `PING` | `PONG` |
 | `CAPS` | 返回 30 字符、CW/CW-R、BK-IN 等约束 |
-| `STATUS` | 返回 lease、TX mode、BK-IN 与硬件 TX 状态 |
+| `STATUS` | 返回 lease、TX mode、BK-IN、硬件 TX 状态与 `KEYRAW=0..255` key-speed 读回 |
 | `SEND <text>` | 使用 IC-9700 CI-V Command 17 发送最多 30 字符 CW |
 | `STOP` | 发送二进制 `17 FF` 停止 CW |
 
