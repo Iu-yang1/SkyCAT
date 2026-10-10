@@ -274,8 +274,10 @@ The protocol is line-oriented ASCII:
 | Request | Reply / action |
 |---|---|
 | `PING` | `PONG` |
-| `CAPS` | Reports the 30-character, CW/CW-R, BK-IN, TXHZ and SENDHZ capabilities |
+| `CAPS` | Reports the 30-character, CW/CW-R, BK-IN, TXHZ/SENDHZ and key-speed control capabilities |
 | `STATUS` | Reports lease state, TX mode, BK-IN, hardware TX state, `KEYRAW=0..255`, and actual TX frequency `TXHZ=<Hz>` |
+| `SETWPM <6..48>` | Quantizes WPM to IC-9700 `14 0C`, writes it, immediately reads it back, and returns `OK KEYRAW=<n> WPM=<actual>` only after verification |
+| `SETKEYRAW <0..255>` | Writes the raw IC-9700 key-speed value and performs the same mandatory readback verification |
 | `SEND <text>` | Sends up to 30 CW characters using IC-9700 CI-V Command 17 |
 | `SENDHZ <expectedHz> <toleranceHz> <text>` | Atomically re-reads actual TX VFO before Command 17; out-of-tolerance returns `ERR FREQ`; validation only, never retunes |
 | `STOP` | Sends binary Command 17 `FF` to stop the keyer |
@@ -285,6 +287,7 @@ Safety policy:
 - TX VFO must already be in **CW or CW-R**.
 - Radio BK-IN must already be **Semi or Full**; SkyCAT never enables BK-IN automatically.
 - `SEND` is rejected if the radio is already transmitting.
+- key-speed writes are rejected while the radio is transmitting or while a CW lease is active; an ACK without matching `14 0C` readback is not accepted as success.
 - CW and CAT/WSJT-X PTT share an exclusive transmitter lease.
 - while the CW lease is active, main CAT TX/split frequency `I`, TX/split mode `X`, CTCSS `C`/`U TONE`, and operating-mode/SAT reconfiguration return `RPRT -6`; RX `F`/`M`, reads, scope and RF-gain traffic remain available.
 - satellite clients should use `SENDHZ` so the actual TX VFO is validated inside the same serial/lease critical section immediately before Command 17.
