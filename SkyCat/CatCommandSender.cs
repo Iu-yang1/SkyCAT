@@ -324,6 +324,46 @@ namespace SkyCat
     }
 
     /// <summary>
+    /// Read IC-9700 keying-speed control 14 0C as normalized raw 0..255.
+    /// The radio encodes this control as four decimal BCD digits 0000..0255.
+    /// </summary>
+    public int ReadIcomKeySpeedRaw()
+    {
+      byte[] value =
+        ReadIcomSwitchSetting(
+          new byte[] { 0x14, 0x0C },
+          2);
+
+      if (value.Length != 2)
+        throw new InvalidReplyException(
+          "IC-9700 returned an invalid key-speed value.");
+
+      int d0 = value[0] >> 4;
+      int d1 = value[0] & 0x0F;
+      int d2 = value[1] >> 4;
+      int d3 = value[1] & 0x0F;
+
+      if (d0 > 9 ||
+          d1 > 9 ||
+          d2 > 9 ||
+          d3 > 9)
+        throw new InvalidReplyException(
+          "IC-9700 returned malformed key-speed BCD.");
+
+      int raw =
+        d0 * 1000 +
+        d1 * 100 +
+        d2 * 10 +
+        d3;
+
+      if (raw is < 0 or > 255)
+        throw new InvalidReplyException(
+          "IC-9700 key-speed value is outside 0000..0255.");
+
+      return raw;
+    }
+
+    /// <summary>
     /// Change the hardware RF gain of the IC-9700 through its existing CAT
     /// transport. RS-BA1's *audio* gain is intentionally not controlled here.
     /// This method is invoked under CatServer.commandLock.
