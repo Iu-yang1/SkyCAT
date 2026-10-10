@@ -260,8 +260,10 @@ skycatd.exe -m IC-9700 -r COM9 --cw-port 4538
 | 请求 | 返回/作用 |
 |---|---|
 | `PING` | `PONG` |
-| `CAPS` | 返回 30 字符、CW/CW-R、BK-IN，以及 TXHZ/SENDHZ 能力 |
+| `CAPS` | 返回 30 字符、CW/CW-R、BK-IN、TXHZ/SENDHZ 与发报速度控制能力 |
 | `STATUS` | 返回 lease、TX mode、BK-IN、硬件 TX、`KEYRAW=0..255` 与实际 TX 频率 `TXHZ=<Hz>` |
+| `SETWPM <6..48>` | 将 WPM 量化为 IC-9700 `14 0C`，写入后立即回读；只有校验一致才返回 `OK KEYRAW=<n> WPM=<实际值>` |
+| `SETKEYRAW <0..255>` | 直接写原始发报速度值，并执行相同的强制回读校验 |
 | `SEND <text>` | 使用 IC-9700 CI-V Command 17 发送最多 30 字符 CW |
 | `SENDHZ <expectedHz> <toleranceHz> <text>` | 在 Command 17 前原子回读实际 TX VFO；超差返回 `ERR FREQ`，只验证、不调谐 |
 | `STOP` | 发送二进制 `17 FF` 停止 CW |
@@ -271,6 +273,7 @@ skycatd.exe -m IC-9700 -r COM9 --cw-port 4538
 - 只允许 TX VFO 已处于 **CW/CW-R** 时发送；
 - 要求电台自身 **BK-IN 已经是 Semi 或 Full**；SkyCAT 不会自动打开 BK-IN；
 - 如果电台当前已经在 TX，`SEND` 会拒绝；
+- 电台正在发射或已有 CW lease 时拒绝修改速度；仅收到写 ACK 但 `14 0C` 回读不一致不会视为成功；
 - CW keyer 与主 CAT / WSJT-X 的 PTT 共用互斥发送 lease；
 - 发送超时、TCP 断开、串口重连或 skycatd 退出时都会尝试 `17 FF`；
 - 如果 STOP 无法确认，lease 会保持 fail-closed，其他 PTT/CW 客户端不能继续发射。
