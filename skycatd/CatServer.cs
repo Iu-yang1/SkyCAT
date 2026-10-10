@@ -57,17 +57,29 @@ namespace skycatd
         ? IPAddress.Any
         : IPAddress.Loopback;
 
+      var cwCatGate =
+        new CwCatWriteGate(
+          () => cwLease?.HasLease == true,
+          commandInterpreter.Execute);
+
       tcpServer = new TcpServer(
         options.Port,
-        commandInterpreter.Execute,
+        cwCatGate.Execute,
         logger,
         catListenAddress,
         commandLock,
         serverName: "CAT",
         clientSessionFactory: () =>
         {
-          var session = new PttCommandSession(commandInterpreter.Execute, logger, "CAT", pttLease);
-          return new TcpClientSession(session.Execute, session.EnsurePttOff);
+          var session =
+            new PttCommandSession(
+              cwCatGate.Execute,
+              logger,
+              "CAT",
+              pttLease);
+          return new TcpClientSession(
+            session.Execute,
+            session.EnsurePttOff);
         });
 
       // Separate loopback socket, sharing the original serial transaction lock.
