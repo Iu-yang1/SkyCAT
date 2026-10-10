@@ -242,7 +242,7 @@ TEST"));
       new Fixture();
 
     Assert.Equal(
-      "STATUS IDLE MODE=CW BKIN=1 TX=0",
+      "STATUS IDLE MODE=CW BKIN=1 TX=0 KEYRAW=128",
       fixture.Keyer.Execute(
         fixture.CwClient,
         "STATUS"));
@@ -254,7 +254,7 @@ TEST"));
         "SEND CQ"));
 
     Assert.Equal(
-      "STATUS OWNED MODE=CW BKIN=1 TX=0",
+      "STATUS OWNED MODE=CW BKIN=1 TX=0 KEYRAW=128",
       fixture.Keyer.Execute(
         fixture.CwClient,
         "STATUS"));
@@ -279,6 +279,8 @@ TEST"));
       1;
     public string HardwarePtt { get; set; } =
       "0";
+    public int KeySpeedRaw { get; set; } =
+      128;
 
     public Exception? SendFailure {
       get; set;
@@ -318,6 +320,8 @@ TEST"));
             },
           readBreakIn: () =>
             BreakIn,
+          readKeySpeedRaw: () =>
+            KeySpeedRaw,
           sendCw: text =>
           {
             if (SendFailure != null)
