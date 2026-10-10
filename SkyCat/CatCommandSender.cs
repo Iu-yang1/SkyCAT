@@ -255,6 +255,115 @@ namespace SkyCat
     }
 
     /// <summary>
+    /// Send a validated IC-9700 CI-V Command 17 CW message. The radio itself
+    /// transmits the text only when it is in CW/CW-R and either BK-IN or a TX
+    /// switch is active. Higher layers deliberately preflight those conditions
+    /// before calling this method.
+    /// </summary>
+    public void SendIcomCwMessage(string text)
+    {
+      ValidateIcomScopeTransport();
+      byte[] frame =
+        IcomCwMessageCodec.BuildSend(text);
+
+      _ = SendMessage(new CatMessage {
+        Command =
+          frame.Select(b => (byte?)b).ToArray(),
+        Reply =
+          new byte?[] {
+            0xFE, 0xFE,
+            0xE0, 0xA2,
+            0xFB, 0xFD
+          },
+        Comment =
+          "IC-9700 CW Command 17 message"
+      });
+    }
+
+    /// <summary>
+    /// Fail-safe stop for an in-progress IC-9700 Command 17 message. The stop
+    /// data byte is binary FF, not the two ASCII characters 'F''F'.
+    /// </summary>
+    public void StopIcomCwMessage()
+    {
+      ValidateIcomScopeTransport();
+      byte[] frame =
+        IcomCwMessageCodec.BuildStop();
+
+      _ = SendMessage(new CatMessage {
+        Command =
+          frame.Select(b => (byte?)b).ToArray(),
+        Reply =
+          new byte?[] {
+            0xFE, 0xFE,
+            0xE0, 0xA2,
+            0xFB, 0xFD
+          },
+        Comment =
+          "IC-9700 CW Command 17 stop"
+      });
+    }
+
+    /// <summary>
+    /// Read IC-9700 BK-IN state through CI-V 16 47.
+    /// 0=OFF, 1=Semi BK-IN, 2=Full BK-IN.
+    /// </summary>
+    public int ReadIcomBreakInMode()
+    {
+      byte[] value =
+        ReadIcomSwitchSetting(
+          new byte[] { 0x16, 0x47 },
+          1);
+
+      if (value.Length != 1 ||
+          value[0] > 2)
+        throw new InvalidReplyException(
+          "IC-9700 returned an invalid BK-IN value.");
+
+      return value[0];
+    }
+
+    /// <summary>
+    /// Read IC-9700 keying-speed control 14 0C as normalized raw 0..255.
+    /// The radio encodes this control as four decimal BCD digits 0000..0255.
+    /// </summary>
+    public int ReadIcomKeySpeedRaw()
+    {
+      byte[] value =
+        ReadIcomSwitchSetting(
+          new byte[] { 0x14, 0x0C },
+          2);
+
+      if (value.Length != 2)
+        throw new InvalidReplyException(
+          "IC-9700 returned an invalid key-speed value.");
+
+      int d0 = value[0] >> 4;
+      int d1 = value[0] & 0x0F;
+      int d2 = value[1] >> 4;
+      int d3 = value[1] & 0x0F;
+
+      if (d0 > 9 ||
+          d1 > 9 ||
+          d2 > 9 ||
+          d3 > 9)
+        throw new InvalidReplyException(
+          "IC-9700 returned malformed key-speed BCD.");
+
+      int raw =
+        d0 * 1000 +
+        d1 * 100 +
+        d2 * 10 +
+        d3;
+
+      if (raw is < 0 or > 255)
+        throw new InvalidReplyException(
+          "IC-9700 key-speed value is outside 0000..0255.");
+
+      return raw;
+    }
+
+    /// <summary>
     /// Change the hardware RF gain of the IC-9700 through its existing CAT
     /// transport. RS-BA1's *audio* gain is intentionally not controlled here.
     /// This method is invoked under CatServer.commandLock.

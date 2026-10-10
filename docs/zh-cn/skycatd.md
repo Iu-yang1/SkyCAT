@@ -10,11 +10,12 @@ nav_order: 3
 
 **skycatd.exe** 是一个基于 SkyCAT 类库的命令行程序。它通过串口连接电台，并通过 TCP 向客户端提供 CAT 控制接口。
 
-当前 fork 还提供三个仅监听本机回环地址的附加服务：
+当前 fork 还提供四个仅监听本机回环地址的附加服务：
 
 - 面向 WSJT-X 的受限 Hamlib NET rigctl 兼容代理；
 - 面向 SkyRoof 的 IC-9700 原生二进制频谱帧流；
-- 面向 IC-9700 Remote Control Switch 的受限辅助控制接口。
+- 面向 IC-9700 Remote Control Switch 的受限辅助控制接口；
+- 面向 SkyRoof CW Console 的 IC-9700 安全 CW Command 17 keyer 接口。
 
 ## 安装
 
@@ -66,6 +67,7 @@ skycatd.exe -m IC-9700 -r COM9 -s 115200
 | WSJT-X 兼容代理 | `127.0.0.1` | 4534 |
 | IC-9700 频谱流 | `127.0.0.1` | 4535 |
 | Remote Control Switch 辅助控制 | `127.0.0.1` | 4537 |
+| IC-9700 CW keyer | `127.0.0.1` | 4538 |
 
 主 CAT 服务默认只允许本机连接。只有显式使用 `--allow-remote` 时，它才会监听所有网络接口。
 
@@ -171,7 +173,7 @@ skycatd.exe -m IC-9700 -r COM9 --allow-remote
 0.0.0.0:4532
 ```
 
-这个参数**只影响主 CAT 服务**。WSJT-X 代理、Scope stream 和 Switch 专用端口仍然只监听 `127.0.0.1`。
+这个参数**只影响主 CAT 服务**。WSJT-X 代理、Scope stream、Switch 专用端口和 CW keyer 仍然只监听 `127.0.0.1`。
 
 > 主 CAT TCP 协议本身不提供 TLS 或用户认证。不要直接把它暴露到公网。远程控制应使用受信任局域网、防火墙规则、VPN 或受保护的隧道。
 
@@ -242,6 +244,43 @@ Remote Control Switch 中保存的 TCP 地址。
 
 关闭 Switch 辅助端口；主 CAT、WSJT-X 和频谱服务不受影响
 （它们仍分别受自身参数控制）。
+
+### `--cw-port <port>`
+
+可选，默认值：**4538**。
+
+设置只在 IC-9700 型号下启动的 CW 自动拍发端口。该服务始终只监听本机 `127.0.0.1`，不是 rigctl，也不接受原始 CI-V。
+
+```powershell
+skycatd.exe -m IC-9700 -r COM9 --cw-port 4538
+```
+
+协议是逐行 ASCII：
+
+| 请求 | 返回/作用 |
+|---|---|
+| `PING` | `PONG` |
+| `CAPS` | 返回 30 字符、CW/CW-R、BK-IN 等约束 |
+| `STATUS` | 返回 lease、TX mode、BK-IN、硬件 TX 状态与 `KEYRAW=0..255` key-speed 读回 |
+| `SEND <text>` | 使用 IC-9700 CI-V Command 17 发送最多 30 字符 CW |
+| `STOP` | 发送二进制 `17 FF` 停止 CW |
+
+安全规则：
+
+- 只允许 TX VFO 已处于 **CW/CW-R** 时发送；
+- 要求电台自身 **BK-IN 已经是 Semi 或 Full**；SkyCAT 不会自动打开 BK-IN；
+- 如果电台当前已经在 TX，`SEND` 会拒绝；
+- CW keyer 与主 CAT / WSJT-X 的 PTT 共用互斥发送 lease；
+- 发送超时、TCP 断开、串口重连或 skycatd 退出时都会尝试 `17 FF`；
+- 如果 STOP 无法确认，lease 会保持 fail-closed，其他 PTT/CW 客户端不能继续发射。
+
+支持字符与 IC-9700 CI-V 手册 Command 17 一致，最多 30 字符；`^` 可表示无字符间隔的 prosign 连接。
+
+### `--no-cw-port`
+
+可选，默认：**关闭**。
+
+完全禁用专用 CW keyer 端口。主 CAT、WSJT-X、频谱流和 Switch 辅助接口不受影响。
 
 ### `-v, --verbose`
 

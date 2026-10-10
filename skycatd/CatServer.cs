@@ -19,12 +19,14 @@ namespace skycatd
     private readonly TcpServer tcpServer;
     private readonly TcpServer? wsjtXTcpServer;
     private readonly TcpServer? switchTcpServer;
+    private readonly TcpServer? cwTcpServer;
     private readonly ScopeStreamServer scopeStreamServer;
     private readonly CommandInterpreter commandInterpreter;
     private readonly CatCommandSender commandSender;
     private readonly SerialPort serialPort;
     private readonly object commandLock = new();
     private readonly PttLeaseManager pttLease;
+    private readonly IcomCwKeyerLeaseManager? cwLease;
     private Task? ScopeDrainTask;
 
     private PortStatus ComStatus;
@@ -32,6 +34,7 @@ namespace skycatd
     private PortStatus WsjtXTcpStatus;
     private PortStatus ScopeTcpStatus;
     private PortStatus SwitchTcpStatus;
+    private PortStatus CwTcpStatus;
 
     public CatServer(Options options)
     {
@@ -78,6 +81,39 @@ namespace skycatd
           IPAddress.Loopback,
           commandLock,
           serverName: "IC-9700 Remote Control Switch");
+
+      // Dedicated loopback-only CW keyer. The session factory gives every
+      // TCP client a stable ownership token so disconnect cleanup can stop
+      // only the message that client started.
+      if (!options.DisableCwPort &&
+          string.Equals(commandSender.RadioName, "IC-9700",
+            StringComparison.OrdinalIgnoreCase))
+      {
+        cwLease =
+          new IcomCwKeyerLeaseManager(
+            commandSender,
+            pttLease,
+            logger);
+
+        cwTcpServer = new TcpServer(
+          options.CwPort,
+          _ => "ERR INVALID",
+          logger,
+          IPAddress.Loopback,
+          commandLock,
+          serverName: "IC-9700 CW keyer",
+          clientSessionFactory: () =>
+          {
+            var owner = new object();
+            return new TcpClientSession(
+              request =>
+                cwLease.Execute(
+                  owner,
+                  request),
+              () =>
+                cwLease.Release(owner));
+          });
+      }
 
       if (!options.DisableWsjtXProxy)
       {
@@ -213,7 +249,12 @@ namespace skycatd
 
             logger.LogInformation("Serial port opened.");
             lock (commandLock)
+            {
+              // Recover uncertain TX state before accepting any new control
+              // client. CW STOP is attempted before CAT PTT can be leased.
+              cwLease?.RetryUncertainRelease();
               pttLease.RetryUncertainRelease();
+            }
           }
           catch (Exception ex)
           {
@@ -222,12 +263,14 @@ namespace skycatd
             tcpServer.Stop();
             wsjtXTcpServer?.Stop();
             switchTcpServer?.Stop();
+            cwTcpServer?.Stop();
             scopeStreamServer.Stop();
             ComStatus = PortStatus.WasClosed;
             TcpStatus = PortStatus.WasClosed;
             WsjtXTcpStatus = PortStatus.WasClosed;
             ScopeTcpStatus = PortStatus.WasClosed;
             SwitchTcpStatus = PortStatus.WasClosed;
+            CwTcpStatus = PortStatus.WasClosed;
           }
 
         // if com is open, try to start the main SkyCAT TCP server
@@ -279,6 +322,23 @@ namespace skycatd
             SwitchTcpStatus = PortStatus.WasClosed;
           }
 
+        // Command 17 CW is isolated from normal CAT/PTT on a dedicated,
+        // loopback-only endpoint. Every request still uses commandLock.
+        if (serialPort.IsOpen && cwTcpServer != null && !cwTcpServer.IsListening())
+          try
+          {
+            cwTcpServer.Start();
+            CwTcpStatus = PortStatus.WasOpen;
+            logger.LogInformation(
+              $"IC-9700 CW keyer started on 127.0.0.1:{options.CwPort}.");
+          }
+          catch (Exception ex)
+          {
+            if (CwTcpStatus != PortStatus.WasClosed)
+              logger.LogWarning($"CW keyer TCP listener error: {ex.Message}");
+            CwTcpStatus = PortStatus.WasClosed;
+          }
+
         // Native IC-9700 scope frames are exported separately so scope traffic can
         // never corrupt the line-oriented CAT/rigctl protocol.
         if (serialPort.IsOpen && !scopeStreamServer.IsListening())
@@ -303,8 +363,15 @@ namespace skycatd
       // Then release any CAT PTT asserted through either the WSJT-X proxy or the
       // main SkyCAT command endpoint while the serial port is still available.
       wsjtXTcpServer?.Stop();
+      cwTcpServer?.Stop();
       switchTcpServer?.Stop();
       tcpServer.Stop();
+
+      // TcpServer disconnect callbacks have already attempted owner-specific
+      // cleanup. Make one final serialized STOP attempt before closing CI-V.
+      lock (commandLock)
+        cwLease?.RetryUncertainRelease();
+
       ReleasePttBeforeShutdown();
 
       scopeStreamServer.Stop();

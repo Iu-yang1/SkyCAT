@@ -11,11 +11,12 @@ nav_order: 3
 **skycatd.exe** is a command-line application based on the SkyCAT library. It connects to a
 radio through a serial port and exposes CAT control over TCP.
 
-This fork also provides three additional loopback-only services:
+This fork also provides four additional loopback-only services:
 
 - a restricted Hamlib NET rigctl compatibility endpoint for WSJT-X;
 - a binary IC-9700 scope-frame stream for SkyRoof;
-- a restricted IC-9700 auxiliary-settings API for Remote Control Switch.
+- a restricted IC-9700 auxiliary-settings API for Remote Control Switch;
+- a fail-closed IC-9700 CI-V Command 17 CW keyer endpoint for SkyRoof.
 
 ## Installation
 
@@ -72,6 +73,7 @@ With the default options, skycatd opens the following listeners:
 | WSJT-X compatibility proxy | `127.0.0.1` | 4534 |
 | IC-9700 scope stream | `127.0.0.1` | 4535 |
 | IC-9700 Remote Control Switch | `127.0.0.1` | 4537 |
+| IC-9700 CW keyer | `127.0.0.1` | 4538 |
 
 The main CAT server is loopback-only by default. It listens on all interfaces only when
 `--allow-remote` is explicitly specified.
@@ -180,7 +182,7 @@ the main CAT server listens on:
 ```
 
 This option affects only the main CAT listener. The WSJT-X proxy, scope stream,
-and Switch auxiliary endpoint remain loopback-only.
+Switch auxiliary endpoint and CW keyer remain loopback-only.
 
 > The main CAT TCP protocol does not provide TLS or user authentication. Do not expose it
 > directly to the public Internet. For remote operation, use a trusted LAN, firewall rules,
@@ -256,6 +258,43 @@ Optional. Default: **off**.
 
 Disables the dedicated auxiliary-settings listener. The CAT, WSJT-X and scope
 services remain available (subject to their own options).
+
+### `--cw-port <port>`
+
+Optional. Default: **4538**.
+
+Sets the IC-9700-only, loopback-only automatic CW keyer endpoint used by SkyRoof. It is not rigctl and never accepts raw CI-V.
+
+```bash
+skycatd.exe -m IC-9700 -r COM9 --cw-port 4538
+```
+
+The protocol is line-oriented ASCII:
+
+| Request | Reply / action |
+|---|---|
+| `PING` | `PONG` |
+| `CAPS` | Reports the 30-character, CW/CW-R and BK-IN requirements |
+| `STATUS` | Reports lease state, TX mode, BK-IN, hardware TX state and `KEYRAW=0..255` key-speed readback |
+| `SEND <text>` | Sends up to 30 CW characters using IC-9700 CI-V Command 17 |
+| `STOP` | Sends binary Command 17 `FF` to stop the keyer |
+
+Safety policy:
+
+- TX VFO must already be in **CW or CW-R**.
+- Radio BK-IN must already be **Semi or Full**; SkyCAT never enables BK-IN automatically.
+- `SEND` is rejected if the radio is already transmitting.
+- CW and CAT/WSJT-X PTT share an exclusive transmitter lease.
+- ambiguous SEND, disconnect, serial recovery and shutdown all attempt a fail-safe binary `17 FF`.
+- if STOP cannot be confirmed, the lease remains fail-closed and no other PTT/CW client may transmit.
+
+The supported text alphabet follows IC-9700 Command 17. Messages are limited to 30 characters; `^` can be used for a no-inter-character-space prosign sequence.
+
+### `--no-cw-port`
+
+Optional. Default: **off**.
+
+Disables the dedicated CW keyer endpoint. Main CAT, WSJT-X, scope and Switch services remain unaffected.
 
 ### `-v, --verbose`
 
