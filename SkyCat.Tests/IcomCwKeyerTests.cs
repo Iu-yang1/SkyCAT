@@ -307,6 +307,64 @@ public sealed class IcomCwKeyerTests
   }
 
   [Fact]
+  public void SetWpm_WritesQuantizedRawAndReturnsVerifiedReadback()
+  {
+    var fixture = new Fixture();
+
+    Assert.Equal(
+      "OK KEYRAW=85 WPM=20.00",
+      fixture.Keyer.Execute(
+        fixture.CwClient,
+        "SETWPM 20"));
+
+    Assert.Equal(85, fixture.KeySpeedRaw);
+    Assert.Equal(new[] { 85 }, fixture.WrittenKeySpeeds);
+  }
+
+  [Fact]
+  public void SetKeyRaw_VerifiesReadbackAndRejectsMismatchOrActiveTx()
+  {
+    var fixture = new Fixture();
+
+    Assert.Equal(
+      "OK KEYRAW=128 WPM=27.08",
+      fixture.Keyer.Execute(
+        fixture.CwClient,
+        "SETKEYRAW 128"));
+
+    fixture.ForceKeySpeedReadback = 127;
+    Assert.Equal(
+      "ERR VERIFY",
+      fixture.Keyer.Execute(
+        fixture.CwClient,
+        "SETKEYRAW 128"));
+
+    fixture.ForceKeySpeedReadback = null;
+    fixture.HardwarePtt = "1";
+    Assert.Equal(
+      "ERR TXACTIVE",
+      fixture.Keyer.Execute(
+        fixture.CwClient,
+        "SETWPM 18"));
+  }
+
+  [Theory]
+  [InlineData("SETWPM 5.9")]
+  [InlineData("SETWPM 48.1")]
+  [InlineData("SETWPM nope")]
+  [InlineData("SETKEYRAW -1")]
+  [InlineData("SETKEYRAW 256")]
+  public void KeySpeedCommands_RejectInvalidValues(string request)
+  {
+    var fixture = new Fixture();
+    Assert.Equal(
+      "ERR INVALID",
+      fixture.Keyer.Execute(
+        fixture.CwClient,
+        request));
+  }
+
+  [Fact]
   public void Status_ReportsRadioPreflightAndLeaseState()
   {
     var fixture =
@@ -352,6 +410,8 @@ public sealed class IcomCwKeyerTests
       "0";
     public int KeySpeedRaw { get; set; } =
       128;
+    public int? ForceKeySpeedReadback { get; set; }
+    public List<int> WrittenKeySpeeds { get; } = [];
     public long ActualTxFrequencyHz { get; set; } =
       435000000;
 
@@ -397,7 +457,12 @@ public sealed class IcomCwKeyerTests
           readBreakIn: () =>
             BreakIn,
           readKeySpeedRaw: () =>
-            KeySpeedRaw,
+            ForceKeySpeedReadback ?? KeySpeedRaw,
+          writeKeySpeedRaw: raw =>
+          {
+            WrittenKeySpeeds.Add(raw);
+            KeySpeedRaw = raw;
+          },
           sendCw: text =>
           {
             if (SendFailure != null)
