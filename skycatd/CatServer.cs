@@ -37,11 +37,15 @@ namespace skycatd
     private PortStatus SwitchTcpStatus;
     private PortStatus CwTcpStatus;
 
-    public CatServer(Options options)
+    /// <summary>
+    /// An embedded host may inject its own logger. Do not replace the global
+    /// Serilog.Log.Logger owned by the host application.
+    /// </summary>
+    public CatServer(Options options, Microsoft.Extensions.Logging.ILogger? hostLogger = null)
     {
       this.options = options;
 
-      logger = CreateLogger(options);
+      logger = hostLogger ?? CreateLogger(options);
 
       var version = typeof(Program).Assembly.GetName().Version;
       logger.LogInformation($"Starting CAT server: skycatd v.{version}.");
