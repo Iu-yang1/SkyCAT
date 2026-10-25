@@ -158,6 +158,14 @@ namespace SkyCat
       }
       // A failed PTT OFF is intentionally not treated as a successful
       // release. Preserve the attempted/owned flags for final shutdown retry.
+      // Never restore mode/transceive settings while a locally asserted PTT
+      // might still be keyed. Failed OFF remains pending for the owner-aware
+      // shutdown retry; observed PTT from other controllers is not ownership.
+      if (PttMayBeOwnedByCommand)
+      {
+        Log?.LogWarning("Delaying radio teardown: SkyCAT PTT release remains uncertain.");
+        return;
+      }
       if (CommandGroup?.GetValueOrDefault(CatCommand.teardown) == null) return;
       if (!SerialPort.IsOpen) return;
 
