@@ -15,6 +15,7 @@ namespace skycatd
 
     private readonly Options options;
     private readonly CancellationTokenSource cts = new();
+    private readonly ManualResetEventSlim stopped = new(false);
     private readonly Microsoft.Extensions.Logging.ILogger logger;
     private readonly TcpServer tcpServer;
     private readonly TcpServer? wsjtXTcpServer;
@@ -386,6 +387,12 @@ namespace skycatd
 
       ReleasePttBeforeShutdown();
 
+      // Restore Icom setup state only AFTER per-client PTT/CW cleanup.
+      // This is intentionally done at full-server shutdown or explicit mode
+      // switch, NOT whenever one of the multiple CAT/WSJT-X/CW clients leaves.
+      lock(commandLock)
+        commandInterpreter.Teardown();
+
       scopeStreamServer.Stop();
       commandSender.ScopeFrameReceived -= scopeStreamServer.Publish;
       if (serialPort.IsOpen) serialPort.Close();
@@ -397,7 +404,11 @@ namespace skycatd
       }
 
       logger.LogInformation("CatServer shutting down.");
+      stopped.Set();
     }
+
+    public bool WaitUntilStopped(int timeoutMs) =>
+      stopped.Wait(timeoutMs);
 
     private void ReleasePttBeforeShutdown()
     {

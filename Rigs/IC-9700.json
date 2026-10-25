@@ -195,6 +195,16 @@
       ],
       "restriction": "when_setting_up"
     },
+    "teardown": {
+      "messages": [
+        {
+          "command": ["FE", "FE", "A2", "E0", "1A", "05", "01", "27", "01", "FD"],
+          "reply": ["FE", "FE", "E0", "A2", "FB", "FD"],
+          "comment": "restore CI-V Transceive on"
+        }
+      ],
+      "restriction": "when_setting_up"
+    },
     "read_rx_frequency": {
       "messages": [
         {
@@ -1760,6 +1770,16 @@
       ],
       "restriction": "when_setting_up"
     },
+    "teardown": {
+      "messages": [
+        {
+          "command": ["FE", "FE", "A2", "E0", "1A", "05", "01", "27", "01", "FD"],
+          "reply": ["FE", "FE", "E0", "A2", "FB", "FD"],
+          "comment": "restore CI-V Transceive on"
+        }
+      ],
+      "restriction": "when_setting_up"
+    },
     "read_rx_frequency": {
       "messages": [
         {
@@ -2619,6 +2639,16 @@
             "FD"
           ],
           "comment": "split off"
+        }
+      ],
+      "restriction": "when_setting_up"
+    },
+    "teardown": {
+      "messages": [
+        {
+          "command": ["FE", "FE", "A2", "E0", "1A", "05", "01", "27", "01", "FD"],
+          "reply": ["FE", "FE", "E0", "A2", "FB", "FD"],
+          "comment": "restore CI-V Transceive on"
         }
       ],
       "restriction": "when_setting_up"

@@ -6,7 +6,7 @@ nav_order: 1
 **Language:** English | [简体中文](zh-cn/)
 
 
-# SkyCAT 1.7
+# SkyCAT 1.8
 
 ## Overview
 
