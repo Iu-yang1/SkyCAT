@@ -129,6 +129,16 @@ namespace SkyCat.Tests
 
 
     [Fact]
+    public void Ic9700TeardownRestoresTransceiveForEveryMode()
+    {
+      var path = Path.Combine(AppContext.BaseDirectory,"Rigs","IC-9700.json");
+      var set = CatCommandSet.FromJson(File.ReadAllText(path));
+      byte?[] expected = [0xFE,0xFE,0xA2,0xE0,0x1A,0x05,0x01,0x27,0x01,0xFD];
+      foreach(var group in new[]{set.Duplex,set.Split,set.Simplex})
+        Assert.Equal(expected,group![CatCommand.teardown].Messages[0].Command);
+    }
+
+    [Fact]
     public void RigFolderIsNotEmpty()
     {
       var dir = Path.Combine(AppContext.BaseDirectory, "Rigs");

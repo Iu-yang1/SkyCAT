@@ -145,7 +145,8 @@ namespace SkyCat
       try
       {
         // a client that crashed while transmitting must not leave the radio keyed
-        if (Transmitting && SerialPort.IsOpen && CommandGroup?.GetValueOrDefault(CatCommand.write_ptt_off) != null)
+        if (PttMayBeOwnedByCommand && SerialPort.IsOpen &&
+            CommandGroup?.GetValueOrDefault(CatCommand.write_ptt_off) != null)
         {
           Log?.LogWarning($"Radio '{RadioName}' is still transmitting, turning PTT off");
           SendCommand(CatCommand.write_ptt_off, null, true);
@@ -155,11 +156,8 @@ namespace SkyCat
       {
         Log?.LogError($"PTT off failed: {ex.Message}");
       }
-      finally
-      {
-        Transmitting = false;
-      }
-
+      // A failed PTT OFF is intentionally not treated as a successful
+      // release. Preserve the attempted/owned flags for final shutdown retry.
       if (CommandGroup?.GetValueOrDefault(CatCommand.teardown) == null) return;
       if (!SerialPort.IsOpen) return;
 
