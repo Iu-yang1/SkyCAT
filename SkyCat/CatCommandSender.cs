@@ -1066,7 +1066,8 @@ namespace SkyCat
           buffer.AsSpan(0, received),
           new byte[] { 0xFE, 0xFE, 0xE0, 0xA2, 0x27, 0x00 }) >= 0;
 
-      if (containsScope || continuesBufferedFrame)
+      if (containsScope || continuesBufferedFrame ||
+          IsPartialIcomScopeHeader(buffer.AsSpan(0, received)))
       {
         Log?.LogTrace(
           $"Drained {received} byte(s) of asynchronous CI-V/scope traffic");
@@ -1092,6 +1093,21 @@ namespace SkyCat
       Log?.LogWarning(
         $"Unexpected bytes received before command: " +
         $"{BitConverter.ToString(preview)}{suffix}");
+    }
+
+    // Serial reads may return the first 1..5 bytes of a 27 00 scope
+    // frame before the rest is available. In the SO-50 log we saw
+    // FE-FE-E0-A2-27 (five bytes); this is NOT a complete invalid CI-V
+    // reply. The shared ScopeTap still owns frame reassembly.
+    public static bool IsPartialIcomScopeHeader(ReadOnlySpan<byte> bytes)
+    {
+      ReadOnlySpan<byte> prefix = stackalloc byte[]
+        {0xFE,0xFE,0xE0,0xA2,0x27,0x00};
+      if (bytes.Length == 0 || bytes.Length >= prefix.Length)
+        return false;
+      for (int i=0;i<bytes.Length;i++)
+        if (bytes[i]!=prefix[i])return false;
+      return true;
     }
 
     public static bool IsZeroPadding(ReadOnlySpan<byte> bytes)
