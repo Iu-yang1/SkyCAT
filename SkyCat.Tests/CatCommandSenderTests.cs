@@ -97,6 +97,24 @@ namespace SkyCat.Tests
     }
 
 
+    [Theory]
+    [InlineData(new byte[] { 0xFE })]
+    [InlineData(new byte[] { 0xFE, 0xFE, 0xE0, 0xA2, 0x27 })]
+    public void PartialIcomScopeHeaderIsExpectedAsynchronousTraffic(byte[] bytes)
+    {
+      Assert.True(CatCommandSender.IsPartialIcomScopeHeader(bytes));
+    }
+
+    [Theory]
+    [InlineData(new byte[] { 0xFE, 0xFE, 0xE0, 0xA2, 0x27, 0x00 })]
+    [InlineData(new byte[] { 0xFE, 0xFE, 0xE0, 0xA2, 0x03 })]
+    [InlineData(new byte[] { 0xFE, 0xFE, 0xA2, 0xE0, 0x27 })]
+    [InlineData(new byte[] { })]
+    public void CompleteOrUnrelatedCivDataIsNotPartialScopePrefix(byte[] bytes)
+    {
+      Assert.False(CatCommandSender.IsPartialIcomScopeHeader(bytes));
+    }
+
     [Fact]
     public void CommandsAreUnavailableBeforeSetup()
     {
