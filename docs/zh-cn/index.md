@@ -7,7 +7,7 @@ permalink: /zh-cn/
 
 **语言：** [English](../index.md) | 简体中文
 
-# SkyCAT 1.7
+# SkyCAT 1.8.1
 
 ## 概述
 
