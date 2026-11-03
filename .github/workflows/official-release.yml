@@ -37,8 +37,9 @@ jobs:
           if ($version -notmatch '^\d+\.\d+\.\d+$') { throw "Invalid release version: $version" }
           if ($version -ne [string]$lib.Project.PropertyGroup.Version) { throw 'SkyCAT library/app versions disagree' }
           $tag = "v$version"
-          gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
-          if ($LASTEXITCODE -eq 0) { throw "Release already exists; refusing to overwrite $tag" }
+          $existingTags = @(gh release list --repo $env:GITHUB_REPOSITORY --limit 100 --json tagName --jq '.[].tagName')
+          if ($LASTEXITCODE -ne 0) { throw "Failed to list existing Releases" }
+          if ($existingTags -contains $tag) { throw "Release already exists; refusing to overwrite $tag" }
           "RELEASE_VERSION=$version" >> $env:GITHUB_ENV
           "RELEASE_TAG=$tag" >> $env:GITHUB_ENV
 
