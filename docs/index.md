@@ -70,6 +70,7 @@ links remain usable if GitHub's Deployments dashboard is unavailable.
 
 - [SkyCAT Engine](library.md)
 - [skycatd.exe](skycatd.md)
+- [TX-5DR interoperability](tx5dr-interoperability.md)
 - [SkyCAT File Format](commandset-format.md)
 - [Source Code](source.md)
 - [Download](download.md)

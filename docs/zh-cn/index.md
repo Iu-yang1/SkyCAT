@@ -67,6 +67,7 @@ SkyCAT 通过 `Rigs/*.json` 命令集文件支持不同电台。当前仓库已�
 
 - [SkyCAT 类库](library.md)
 - [skycatd.exe 命令行使用说明](skycatd.md)
+- [TX-5DR 兼容性与 CAT 控制权](tx5dr-interoperability.md)
 - [SkyCAT 命令集文件格式](commandset-format.md)
 - [源代码](source.md)
 - [下载](download.md)
