@@ -57,6 +57,8 @@ namespace skycatd
           ReadIcomRfGain(),
         "U" when args.Length == 3 && args[1] == "RF_GAIN" =>
           WriteIcomRfGain(args[2]),
+        "U" when args.Length == 3 && args[1] == "NETWORK_READ_FIELD" =>
+          IcomNetworkCommands.Execute(CommandSender, args[2]),
         // SkyRoof's full spectrum-control protocol. The former interpreter
         // rejected all of these with RPRT -11, leaving controls waiting for
         // SCOPE_READ forever even though the waveform stream was live.

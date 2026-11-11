@@ -577,6 +577,52 @@ namespace SkyCat
         $"({BitConverter.ToString(selectors)}); skipped {skipped} unrelated frames.");
     }
 
+    /// <summary>
+    /// Read an IC-9700 Network setting using the existing serial CI-V owner.
+    /// Only the documented, read-only 1A 05 01 xx registers are exposed.
+    /// </summary>
+    public byte[] ReadIcomNetwork(byte setting, int expectedValueBytes)
+    {
+      if (!string.Equals(RadioName, "IC-9700", StringComparison.OrdinalIgnoreCase))
+        throw new NotSupportedException("Network readback requires IC-9700.");
+      if (!SerialPort.IsOpen)
+        throw new InvalidOperationException("SkyCAT serial CAT port is not connected.");
+
+      int size = setting switch {
+        0x39 => 8, // DHCP IP (also returns static IP when DHCP is disabled)
+        0x45 => 1, // Network Control enabled
+        0x47 or 0x48 or 0x49 => 3, // UDP ports
+        _ => throw new ArgumentOutOfRangeException(nameof(setting))
+      };
+      if (expectedValueBytes != size)
+        throw new ArgumentException("Unexpected network register size.", nameof(expectedValueBytes));
+
+      DumpUnexpectedBytes();
+      byte[] request = { 0xFE, 0xFE, 0xA2, 0xE0, 0x1A, 0x05, 0x01, setting, 0xFD };
+      SerialPort.Write(request, 0, request.Length);
+      SkipEcho(request);
+
+      const int timeoutMs = 1500;
+      long deadline = Environment.TickCount64 + timeoutMs;
+      int skipped = 0;
+      while (Environment.TickCount64 < deadline)
+      {
+        byte[]? frame = ReceiveCivFrame(
+          (int)Math.Max(1, deadline - Environment.TickCount64));
+        if (frame == null) break;
+        if (frame.AsSpan().SequenceEqual(
+              new byte[] { 0xFE, 0xFE, 0xE0, 0xA2, 0xFA, 0xFD }))
+          throw new InvalidReplyException($"Radio rejected network read 01 {setting:X2}.");
+
+        if (IcomNetworkCivCodec.TryExtractQueryReply(
+              frame, setting, size, out byte[] value))
+          return value;
+        skipped++;
+      }
+      throw new TimeoutException(
+        $"No matching response to network read 01 {setting:X2}; skipped {skipped} unrelated CI-V frames.");
+    }
+
     private void ValidateIcomScopeTransport()
     {
       if (!string.Equals(RadioName, "IC-9700", StringComparison.OrdinalIgnoreCase))

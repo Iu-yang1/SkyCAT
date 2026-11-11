@@ -78,6 +78,17 @@ With the default options, skycatd opens the following listeners:
 The main CAT server is loopback-only by default. It listens on all interfaces only when
 `--allow-remote` is explicitly specified.
 
+### Read IC-9700 LAN settings through CI-V
+
+SkyRoof-Plus uses the already connected SkyCAT serial/virtual-COM transport;
+it does not require a second Icom LAN session. The read-only rigctl extension
+`U NETWORK_READ_FIELD <field>` supports `IP`, `ENABLED`, `CONTROL`, `SERIAL` and
+`AUDIO`. Responses are `FIELD=value`; unsupported
+radios/commands return standard RPRT error codes. IP reads CI-V 1A 05 01 39
+(DHCP-assigned address, or configured static address when DHCP is off);
+port fields read 01 47/48/49. Network account IDs and passwords are not
+available through this extension.
+
 ## Command Line Parameters
 
 A typical command line is:
