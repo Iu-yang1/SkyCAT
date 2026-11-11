@@ -218,10 +218,20 @@ namespace skycatd
             // the last TCP/4535 client disconnects. Continue draining the serial
             // transport so stale waveform data cannot accumulate ahead of the
             // next synchronous CAT reply.
-            lock (commandLock)
+            // Scope draining is background work. Do not queue behind or
+            // compete with PTT, Doppler and explicit rigctl transactions.
+            // The native serial buffer retains bytes until the next pass.
+            if (serialPort.BytesToRead > 0 && Monitor.TryEnter(commandLock))
             {
-              if (serialPort.IsOpen && serialPort.BytesToRead > 0)
-                commandSender.DrainAsynchronousScopeTraffic();
+              try
+              {
+                if (serialPort.IsOpen && serialPort.BytesToRead > 0)
+                  commandSender.DrainAsynchronousScopeTraffic();
+              }
+              finally
+              {
+                Monitor.Exit(commandLock);
+              }
             }
 
             await Task.Delay(
