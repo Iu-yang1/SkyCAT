@@ -85,8 +85,11 @@ namespace SkyCat.Tests
           CatCommand.write_rx_frequency, CatCommand.write_tx_frequency })
         {
           Assert.True(group.TryGetValue(action, out var command));
-          Assert.All(command!.Messages,
-            message => Assert.True(message.VariableFrequencyLength));
+          // Only command 25 carries a frequency payload. Subsequent
+          // split ON/OFF maintenance messages must keep fixed framing.
+          Assert.True(command!.Messages[0].VariableFrequencyLength);
+          Assert.All(command.Messages.Skip(1),
+            message => Assert.False(message.VariableFrequencyLength));
         }
       }
 
