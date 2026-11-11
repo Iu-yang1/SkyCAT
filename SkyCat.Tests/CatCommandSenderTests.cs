@@ -98,6 +98,14 @@ namespace SkyCat.Tests
 
 
     [Theory]
+    [InlineData(new byte[] { 0xFE, 0xFE, 0xE0, 0xA4, 0x27 })]
+    [InlineData(new byte[] { 0xFE, 0xFE, 0xE0, 0xAC, 0x27 })]
+    public void Ic705AndIc905PartialScopeHeadersAreAsynchronous(byte[] bytes)
+    {
+      Assert.True(CatCommandSender.IsPartialIcomScopeHeader(bytes));
+    }
+
+    [Theory]
     [InlineData(new byte[] { 0xFE })]
     [InlineData(new byte[] { 0xFE, 0xFE, 0xE0, 0xA2, 0x27 })]
     public void PartialIcomScopeHeaderIsExpectedAsynchronousTraffic(byte[] bytes)

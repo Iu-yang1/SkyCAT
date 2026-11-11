@@ -725,8 +725,20 @@ namespace SkyCat
         int byteCount = message.Command.Count(b => b == null);
         int start = Array.IndexOf(message.Command, null)!;
 
-        byte[] paramBytes = ParamToBytes(message.CommandParam, paramValue, byteCount);
-        Array.Copy(paramBytes, 0, commandBytes, start, paramBytes.Length);
+        int payloadLength =
+          message.VariableFrequencyLength &&
+          Icom905FrequencyFrame.RequiresSixBytes(paramValue!)
+            ? 6
+            : byteCount;
+
+        byte[] paramBytes =
+          ParamToBytes(message.CommandParam, paramValue, payloadLength);
+
+        if (message.VariableFrequencyLength)
+          commandBytes = Icom905FrequencyFrame.ComposeCommand(
+            message.Command, paramBytes);
+        else
+          Array.Copy(paramBytes, 0, commandBytes, start, paramBytes.Length);
       }
 
       string logMmessage = $"  Sending bytes: {BitConverter.ToString(commandBytes)}";
@@ -865,7 +877,13 @@ namespace SkyCat
           throw new InvalidReplyException("Command rejected by the radio");
         }
 
-        if (BytesMatch(frame, message.Reply))
+        bool hasExtendedFrequency =
+          message.VariableFrequencyLength &&
+          message.ReplyParam != null &&
+          Icom905FrequencyFrame.MatchesSixByteReply(
+            frame, message.Reply, out _);
+
+        if (BytesMatch(frame, message.Reply) || hasExtendedFrequency)
         {
           string logMessage =
             $"  Bytes received: {BitConverter.ToString(frame)}";
@@ -885,8 +903,9 @@ namespace SkyCat
             message.ReplyParam.Start ??
             Array.IndexOf(message.Reply, null)!;
           int paramLength =
-            message.ReplyParam.Length ??
-            message.Reply.Count(b => b == null);
+            (message.ReplyParam.Length ??
+             message.Reply.Count(b => b == null)) +
+            (hasExtendedFrequency ? 1 : 0);
 
           byte[] paramBytes =
             frame.Skip(paramStart).Take(paramLength).ToArray();
@@ -1061,10 +1080,18 @@ namespace SkyCat
       int received = ReceiveBytes(buffer, 0, availableBytes);
       if (received <= 0) return;
 
-      bool containsScope =
-        FindSequence(
-          buffer.AsSpan(0, received),
-          new byte[] { 0xFE, 0xFE, 0xE0, 0xA2, 0x27, 0x00 }) >= 0;
+      // Scope waveform frames are identical in envelope across supported
+      // Icom models; the radio CI-V address is model-specific.
+      bool containsScope = false;
+      foreach (byte address in new byte[] { 0xA2, 0xA4, 0xAC })
+      {
+        if (FindSequence(buffer.AsSpan(0, received),
+              new byte[] { 0xFE, 0xFE, 0xE0, address, 0x27, 0x00 }) < 0)
+          continue;
+
+        containsScope = true;
+        break;
+      }
 
       if (containsScope || continuesBufferedFrame ||
           IsPartialIcomScopeHeader(buffer.AsSpan(0, received)))
@@ -1102,11 +1129,18 @@ namespace SkyCat
     public static bool IsPartialIcomScopeHeader(ReadOnlySpan<byte> bytes)
     {
       ReadOnlySpan<byte> prefix = stackalloc byte[]
-        {0xFE,0xFE,0xE0,0xA2,0x27,0x00};
+        { 0xFE, 0xFE, 0xE0, 0xA2, 0x27, 0x00 };
       if (bytes.Length == 0 || bytes.Length >= prefix.Length)
         return false;
-      for (int i=0;i<bytes.Length;i++)
-        if (bytes[i]!=prefix[i])return false;
+
+      for (int i = 0; i < bytes.Length; i++)
+      {
+        if (i == 3 && bytes[i] is 0xA2 or 0xA4 or 0xAC)
+          continue;
+        if (bytes[i] != prefix[i])
+          return false;
+      }
+
       return true;
     }
 
