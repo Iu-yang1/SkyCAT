@@ -1080,10 +1080,12 @@ namespace SkyCat
       int received = ReceiveBytes(buffer, 0, availableBytes);
       if (received <= 0) return;
 
+      // Scope waveform frames are identical in envelope across supported
+      // Icom models; the radio CI-V address is model-specific.
       bool containsScope =
-        FindSequence(
-          buffer.AsSpan(0, received),
-          new byte[] { 0xFE, 0xFE, 0xE0, 0xA2, 0x27, 0x00 }) >= 0;
+        new byte[] { 0xA2, 0xA4, 0xAC }.Any(address =>
+          FindSequence(buffer.AsSpan(0, received),
+            new byte[] { 0xFE, 0xFE, 0xE0, address, 0x27, 0x00 }) >= 0);
 
       if (containsScope || continuesBufferedFrame ||
           IsPartialIcomScopeHeader(buffer.AsSpan(0, received)))
@@ -1121,11 +1123,18 @@ namespace SkyCat
     public static bool IsPartialIcomScopeHeader(ReadOnlySpan<byte> bytes)
     {
       ReadOnlySpan<byte> prefix = stackalloc byte[]
-        {0xFE,0xFE,0xE0,0xA2,0x27,0x00};
+        { 0xFE, 0xFE, 0xE0, 0xA2, 0x27, 0x00 };
       if (bytes.Length == 0 || bytes.Length >= prefix.Length)
         return false;
-      for (int i=0;i<bytes.Length;i++)
-        if (bytes[i]!=prefix[i])return false;
+
+      for (int i = 0; i < bytes.Length; i++)
+      {
+        if (i == 3 && bytes[i] is 0xA2 or 0xA4 or 0xAC)
+          continue;
+        if (bytes[i] != prefix[i])
+          return false;
+      }
+
       return true;
     }
 
