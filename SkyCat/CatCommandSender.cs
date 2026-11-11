@@ -725,8 +725,20 @@ namespace SkyCat
         int byteCount = message.Command.Count(b => b == null);
         int start = Array.IndexOf(message.Command, null)!;
 
-        byte[] paramBytes = ParamToBytes(message.CommandParam, paramValue, byteCount);
-        Array.Copy(paramBytes, 0, commandBytes, start, paramBytes.Length);
+        int payloadLength =
+          message.VariableFrequencyLength &&
+          Icom905FrequencyFrame.RequiresSixBytes(paramValue!)
+            ? 6
+            : byteCount;
+
+        byte[] paramBytes =
+          ParamToBytes(message.CommandParam, paramValue, payloadLength);
+
+        if (message.VariableFrequencyLength)
+          commandBytes = Icom905FrequencyFrame.ComposeCommand(
+            message.Command, paramBytes);
+        else
+          Array.Copy(paramBytes, 0, commandBytes, start, paramBytes.Length);
       }
 
       string logMmessage = $"  Sending bytes: {BitConverter.ToString(commandBytes)}";
@@ -865,7 +877,13 @@ namespace SkyCat
           throw new InvalidReplyException("Command rejected by the radio");
         }
 
-        if (BytesMatch(frame, message.Reply))
+        bool hasExtendedFrequency =
+          message.VariableFrequencyLength &&
+          message.ReplyParam != null &&
+          Icom905FrequencyFrame.MatchesSixByteReply(
+            frame, message.Reply, out _);
+
+        if (BytesMatch(frame, message.Reply) || hasExtendedFrequency)
         {
           string logMessage =
             $"  Bytes received: {BitConverter.ToString(frame)}";
@@ -885,8 +903,9 @@ namespace SkyCat
             message.ReplyParam.Start ??
             Array.IndexOf(message.Reply, null)!;
           int paramLength =
-            message.ReplyParam.Length ??
-            message.Reply.Count(b => b == null);
+            (message.ReplyParam.Length ??
+             message.Reply.Count(b => b == null)) +
+            (hasExtendedFrequency ? 1 : 0);
 
           byte[] paramBytes =
             frame.Skip(paramStart).Take(paramLength).ToArray();
