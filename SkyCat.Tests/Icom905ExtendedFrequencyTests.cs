@@ -99,6 +99,39 @@ namespace SkyCat.Tests
         CatCommand.write_rx_frequency].Messages[0].VariableFrequencyLength);
     }
 
+    [Theory]
+    [InlineData("IC-705", 0xA4)]
+    [InlineData("IC-705-wireless", 0xA4)]
+    [InlineData("IC-905", 0xAC)]
+    public void SingleScopeModelsExposeNativeWaveformOutputControl(
+      string model, int civAddress)
+    {
+      var sender = new CatCommandSender();
+      sender.SelectRadio(model);
+      Assert.NotNull(sender.CommandSet);
+
+      foreach (CatCommandSet.CatCommandGroup? group in new[] {
+        sender.CommandSet!.Simplex, sender.CommandSet.Split })
+      {
+        Assert.NotNull(group);
+        foreach ((CatCommand command, byte selector, byte value) in new[] {
+          (CatCommand.enable_scope, (byte)0x10, (byte)0x01),
+          (CatCommand.disable_scope, (byte)0x10, (byte)0x00),
+          (CatCommand.enable_scope_data, (byte)0x11, (byte)0x01),
+          (CatCommand.disable_scope_data, (byte)0x11, (byte)0x00) })
+        {
+          Assert.True(group.TryGetValue(command, out var entry));
+          Assert.Equal(new byte?[] {
+            0xFE, 0xFE, (byte)civAddress, 0xE0,
+            0x27, selector, value, 0xFD
+          }, entry!.Messages[0].Command);
+          Assert.Equal(new byte?[] {
+            0xFE, 0xFE, 0xE0, (byte)civAddress, 0xFB, 0xFD
+          }, entry.Messages[0].Reply);
+        }
+      }
+    }
+
     [Fact]
     public void NoOtherCatCommandAdoptsExtendedFrequencyEncoding()
     {
