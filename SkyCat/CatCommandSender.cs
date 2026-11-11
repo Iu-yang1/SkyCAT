@@ -623,6 +623,38 @@ namespace SkyCat
         $"No matching response to network read 01 {setting:X2}; skipped {skipped} unrelated CI-V frames.");
     }
 
+    /// <summary>Read the IC-9700's actual 15 xx meter through the existing
+    /// SkyCAT CI-V session, serialized with Doppler and PTT commands.</summary>
+    public int ReadIcomMeter(byte subcommand)
+    {
+      ValidateIcomScopeTransport();
+      if (!IcomMeterCivCodec.ValidMeter(subcommand))
+        throw new ArgumentOutOfRangeException(nameof(subcommand));
+
+      DumpUnexpectedBytes();
+      byte[] request = IcomMeterCivCodec.BuildRead(subcommand);
+      SerialPort.Write(request, 0, request.Length);
+      SkipEcho(request);
+
+      long deadline = Environment.TickCount64 + 650;
+      int skipped = 0;
+      while (Environment.TickCount64 < deadline)
+      {
+        byte[]? frame = ReceiveCivFrame(
+          (int)Math.Max(1, deadline - Environment.TickCount64));
+        if (frame == null) break;
+        if (frame.AsSpan().SequenceEqual(
+          new byte[] { 0xFE, 0xFE, 0xE0, 0xA2, 0xFA, 0xFD }))
+          throw new InvalidReplyException("IC-9700 meter query rejected.");
+
+        if (IcomMeterCivCodec.TryDecode(frame, subcommand, out int value))
+          return value;
+        skipped++;
+      }
+      throw new TimeoutException(
+        $"No IC-9700 meter 15 {subcommand:X2} reply; skipped {skipped} unrelated frames.");
+    }
+
     private void ValidateIcomScopeTransport()
     {
       if (!string.Equals(RadioName, "IC-9700", StringComparison.OrdinalIgnoreCase))
