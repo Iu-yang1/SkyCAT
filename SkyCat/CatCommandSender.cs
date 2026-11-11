@@ -1082,10 +1082,16 @@ namespace SkyCat
 
       // Scope waveform frames are identical in envelope across supported
       // Icom models; the radio CI-V address is model-specific.
-      bool containsScope =
-        new byte[] { 0xA2, 0xA4, 0xAC }.Any(address =>
-          FindSequence(buffer.AsSpan(0, received),
-            new byte[] { 0xFE, 0xFE, 0xE0, address, 0x27, 0x00 }) >= 0);
+      bool containsScope = false;
+      foreach (byte address in new byte[] { 0xA2, 0xA4, 0xAC })
+      {
+        if (FindSequence(buffer.AsSpan(0, received),
+              new byte[] { 0xFE, 0xFE, 0xE0, address, 0x27, 0x00 }) < 0)
+          continue;
+
+        containsScope = true;
+        break;
+      }
 
       if (containsScope || continuesBufferedFrame ||
           IsPartialIcomScopeHeader(buffer.AsSpan(0, received)))
