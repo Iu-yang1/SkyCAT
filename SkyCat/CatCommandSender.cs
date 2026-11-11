@@ -625,6 +625,9 @@ namespace SkyCat
 
     /// <summary>Read the IC-9700's actual 15 xx meter through the existing
     /// SkyCAT CI-V session, serialized with Doppler and PTT commands.</summary>
+    private const int MeterReadTimeoutMs = 250;
+    private int MeterReadSuccessCount;
+
     public int ReadIcomMeter(byte subcommand)
     {
       ValidateIcomScopeTransport();
@@ -636,7 +639,11 @@ namespace SkyCat
       SerialPort.Write(request, 0, request.Length);
       SkipEcho(request);
 
-      long deadline = Environment.TickCount64 + 650;
+      // Meter traffic is nonessential: bound its serial-owner occupancy so
+      // a missing readback cannot delay the next Doppler/PTT transaction for
+      // 650 ms. Normal IC-9700 CI-V replies arrive within a few milliseconds.
+      long started = Environment.TickCount64;
+      long deadline = started + MeterReadTimeoutMs;
       int skipped = 0;
       while (Environment.TickCount64 < deadline)
       {
@@ -648,11 +655,19 @@ namespace SkyCat
           throw new InvalidReplyException("IC-9700 meter query rejected.");
 
         if (IcomMeterCivCodec.TryDecode(frame, subcommand, out int value))
+        {
+          long elapsed = Environment.TickCount64 - started;
+          int count = Interlocked.Increment(ref MeterReadSuccessCount);
+          if (elapsed >= 100 || count % 24 == 0)
+            Log?.LogInformation(
+              "IC-9700 meter CI-V 15 {Kind:X2}: raw={Raw}, latency={Elapsed} ms, skipped={Skipped}",
+              subcommand, value, elapsed, skipped);
           return value;
+        }
         skipped++;
       }
       throw new TimeoutException(
-        $"No IC-9700 meter 15 {subcommand:X2} reply; skipped {skipped} unrelated frames.");
+        $"No IC-9700 meter 15 {subcommand:X2} reply in {MeterReadTimeoutMs} ms; skipped {skipped} unrelated frames.");
     }
 
     private void ValidateIcomScopeTransport()
