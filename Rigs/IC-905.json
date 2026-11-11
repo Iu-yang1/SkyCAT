@@ -16,6 +16,38 @@
       "restriction": "when_setting_up"
     },
 
+    "enable_scope": {
+      "messages": [
+        { "command": ["FE", "FE", "AC", "E0", "27", "10", "01", "FD"],
+          "reply": ["FE", "FE", "E0", "AC", "FB", "FD"],
+          "comment": "scope on" }
+      ]
+    },
+
+    "disable_scope": {
+      "messages": [
+        { "command": ["FE", "FE", "AC", "E0", "27", "10", "00", "FD"],
+          "reply": ["FE", "FE", "E0", "AC", "FB", "FD"],
+          "comment": "scope off" }
+      ]
+    },
+
+    "enable_scope_data": {
+      "messages": [
+        { "command": ["FE", "FE", "AC", "E0", "27", "11", "01", "FD"],
+          "reply": ["FE", "FE", "E0", "AC", "FB", "FD"],
+          "comment": "scope waveform output on" }
+      ]
+    },
+
+    "disable_scope_data": {
+      "messages": [
+        { "command": ["FE", "FE", "AC", "E0", "27", "11", "00", "FD"],
+          "reply": ["FE", "FE", "E0", "AC", "FB", "FD"],
+          "comment": "scope waveform output off" }
+      ]
+    },
+
     "read_rx_frequency": {
       "messages": [
         {
@@ -179,6 +211,38 @@
         { "command": ["FE", "FE", "AC", "E0", "0F", "00", "FD"], "reply": [ "FE", "FE", "E0", "AC",  "FB", "FD"], "comment": "split off" }
       ],
       "restriction": "when_setting_up"
+    },
+
+    "enable_scope": {
+      "messages": [
+        { "command": ["FE", "FE", "AC", "E0", "27", "10", "01", "FD"],
+          "reply": ["FE", "FE", "E0", "AC", "FB", "FD"],
+          "comment": "scope on" }
+      ]
+    },
+
+    "disable_scope": {
+      "messages": [
+        { "command": ["FE", "FE", "AC", "E0", "27", "10", "00", "FD"],
+          "reply": ["FE", "FE", "E0", "AC", "FB", "FD"],
+          "comment": "scope off" }
+      ]
+    },
+
+    "enable_scope_data": {
+      "messages": [
+        { "command": ["FE", "FE", "AC", "E0", "27", "11", "01", "FD"],
+          "reply": ["FE", "FE", "E0", "AC", "FB", "FD"],
+          "comment": "scope waveform output on" }
+      ]
+    },
+
+    "disable_scope_data": {
+      "messages": [
+        { "command": ["FE", "FE", "AC", "E0", "27", "11", "00", "FD"],
+          "reply": ["FE", "FE", "E0", "AC", "FB", "FD"],
+          "comment": "scope waveform output off" }
+      ]
     },
 
     "read_rx_frequency":  {
