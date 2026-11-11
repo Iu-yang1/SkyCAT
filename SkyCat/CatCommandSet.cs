@@ -140,6 +140,11 @@ namespace SkyCat
       [JsonProperty("reply_param")]
       public ParamInfo? ReplyParam { get; set; }
 
+      // IC-905 command 25 is five BCD bytes below 10 GHz and six at 10 GHz.
+      // This applies only to explicitly tagged model-specific entries.
+      [JsonProperty("variable_frequency_length")]
+      public bool VariableFrequencyLength { get; set; }
+
       [JsonProperty("ignore_error")]
       public bool IgnoreError { get; set; }
 
@@ -250,6 +255,18 @@ namespace SkyCat
         if (message.CommandParam.Length.HasValue && message.CommandParam.Length.Value != commandNullCount)
           throw new FormatException($"{infoName}.command_param.length does not match the number of nulls in command.");
       }
+
+      if (message.VariableFrequencyLength &&
+          (command != CatCommand.read_rx_frequency &&
+           command != CatCommand.read_tx_frequency &&
+           command != CatCommand.write_rx_frequency &&
+           command != CatCommand.write_tx_frequency ||
+           message.Command.Length < 7 || message.Command[4] != 0x25 ||
+           (message.CommandParam?.Format != CatParamFormat.BCD_LE &&
+            message.ReplyParam?.Format != CatParamFormat.BCD_LE) ||
+           (commandNullCount != 5 && replyNullCount != 5)))
+        throw new FormatException(
+          $"{infoName}.variable_frequency_length requires an IC-905 command-25 five-byte BCD frequency template.");
 
       if (message.ReplyParam != null && message.IgnoreError)
         throw new FormatException($"{infoName}.ignore_error is not allowed if ReplyParam is defined.");
