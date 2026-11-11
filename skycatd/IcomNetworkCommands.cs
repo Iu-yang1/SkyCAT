@@ -17,12 +17,12 @@ namespace skycatd
 
       (byte register, int size) = field switch
       {
-        "IP" => (0x39, 8),
-        "ENABLED" => (0x45, 1),
-        "CONTROL" => (0x47, 3),
-        "SERIAL" => (0x48, 3),
-        "AUDIO" => (0x49, 3),
-        _ => (0, 0)
+        "IP" => ((byte)0x39, 8),
+        "ENABLED" => ((byte)0x45, 1),
+        "CONTROL" => ((byte)0x47, 3),
+        "SERIAL" => ((byte)0x48, 3),
+        "AUDIO" => ((byte)0x49, 3),
+        _ => ((byte)0, 0)
       };
       if (size == 0) return "RPRT -1";
 
