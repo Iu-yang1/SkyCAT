@@ -1153,12 +1153,15 @@ namespace SkyCat
     public void DrainAsynchronousScopeTraffic()
     {
       if (!SerialPort.IsOpen) return;
-      DumpUnexpectedBytes();
+      // The background scope pump must not occupy the shared CAT lock for
+      // up to one second while a driver returns fewer bytes than reported.
+      // ScopeTap preserves incomplete CI-V frames for the next 15-ms pass.
+      DumpUnexpectedBytes(10);
     }
 
     // Ignore bytes that arrived before the new command was sent. With IC-9700
     // scope output enabled this is normal asynchronous traffic, not an error.
-    private void DumpUnexpectedBytes()
+    private void DumpUnexpectedBytes(int timeoutMs = 1000)
     {
       int availableBytes = SerialPort.BytesToRead;
       if (availableBytes == 0) return;
@@ -1170,7 +1173,7 @@ namespace SkyCat
       bool continuesBufferedFrame = ScopeTap.HasPartialFrame;
 
       byte[] buffer = new byte[availableBytes];
-      int received = ReceiveBytes(buffer, 0, availableBytes);
+      int received = ReceiveBytes(buffer, 0, availableBytes, timeoutMs);
       if (received <= 0) return;
 
       // Scope waveform frames are identical in envelope across supported
