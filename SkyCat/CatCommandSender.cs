@@ -549,7 +549,9 @@ namespace SkyCat
       SerialPort.Write(request, 0, request.Length);
       SkipEcho(request);
 
-      const int timeoutMs = 1500;
+      // Scope register readback is low-priority. A silent 27 xx query must
+      // not monopolize the serial CAT owner and delay live PTT/Doppler writes.
+      const int timeoutMs = 350;
       long deadline = Environment.TickCount64 + timeoutMs;
       int skipped = 0;
       while (Environment.TickCount64 < deadline)
@@ -1161,7 +1163,7 @@ namespace SkyCat
 
     // Ignore bytes that arrived before the new command was sent. With IC-9700
     // scope output enabled this is normal asynchronous traffic, not an error.
-    private void DumpUnexpectedBytes(int timeoutMs = 1000)
+    private void DumpUnexpectedBytes(int timeoutMs = 10)
     {
       int availableBytes = SerialPort.BytesToRead;
       if (availableBytes == 0) return;
